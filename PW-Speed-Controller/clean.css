@@ -17,32 +17,35 @@
   display: none !important;
 }
 
-/* ---------- PW (pw.live) player clutter ---------- */
-.psc-clean [class*="player-options"],
-.psc-clean [class*="playerOptions"],
-.psc-clean [class*="top-options"],
-.psc-clean [class*="topOptions"],
-.psc-clean [class*="video-toggle"],
-.psc-clean [class*="videoToggle"],
-.psc-clean [class*="gesture"],
-.psc-clean [class*="Gesture"],
-.psc-clean [class*="seek-overlay"],
-.psc-clean [class*="seekOverlay"],
-.psc-clean [class*="seek-arrow"],
-.psc-clean [class*="seekArrow"],
-.psc-clean [class*="forward-10"],
-.psc-clean [class*="rewind-10"],
-.psc-clean [class*="skip-forward"],
-.psc-clean [class*="skip-backward"],
-.psc-clean [class*="skip-icon"],
-.psc-clean [class*="double-tap"],
-.psc-clean [class*="doubleTap"] {
+/* ---------- PW (pw.live) player clutter ----------
+   :not(:has(video)) => never hide a container that WRAPS the video,
+   otherwise clean mode could blank the whole player! */
+.psc-clean [class*="player-options"]:not(:has(video)),
+.psc-clean [class*="playerOptions"]:not(:has(video)),
+.psc-clean [class*="top-options"]:not(:has(video)),
+.psc-clean [class*="topOptions"]:not(:has(video)),
+.psc-clean [class*="video-toggle"]:not(:has(video)),
+.psc-clean [class*="videoToggle"]:not(:has(video)),
+.psc-clean [class*="gesture"]:not(:has(video)),
+.psc-clean [class*="Gesture"]:not(:has(video)),
+.psc-clean [class*="seek-overlay"]:not(:has(video)),
+.psc-clean [class*="seekOverlay"]:not(:has(video)),
+.psc-clean [class*="seek-arrow"]:not(:has(video)),
+.psc-clean [class*="seekArrow"]:not(:has(video)),
+.psc-clean [class*="forward-10"]:not(:has(video)),
+.psc-clean [class*="rewind-10"]:not(:has(video)),
+.psc-clean [class*="skip-forward"]:not(:has(video)),
+.psc-clean [class*="skip-backward"]:not(:has(video)),
+.psc-clean [class*="skip-icon"]:not(:has(video)),
+.psc-clean [class*="double-tap"]:not(:has(video)),
+.psc-clean [class*="doubleTap"]:not(:has(video)) {
   display: none !important;
 }
 
-/* ---------- generic toggle chips / buttons floating over video ---------- */
-.psc-clean [class*="toggle"]:not(video):not(#psc-toast),
-.psc-clean [class*="Toggle"]:not(video):not(#psc-toast) {
+/* ---------- generic toggle chips / buttons floating over video ----------
+   same ancestor-of-video protection as above */
+.psc-clean [class*="toggle"]:not(video):not(#psc-toast):not(:has(video)),
+.psc-clean [class*="Toggle"]:not(video):not(#psc-toast):not(:has(video)) {
   display: none !important;
 }
 

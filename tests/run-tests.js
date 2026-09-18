@@ -1,5 +1,5 @@
 /* ================================================================
- *  PW Speed Controller — automated feature test-suite (v1.2)
+ *  PW Speed Controller — automated feature test-suite (v1.3)
  *  Simulates real pages (YouTube / PW style) with jsdom and runs
  *  the REAL content.js against keyboard + player events.
  *  Run:  node run-tests.js
@@ -429,6 +429,106 @@ group('24. Static & packaging checks');
   ok(css.includes('.psc-clean'), 'clean.css hides under .psc-clean');
   ok(css.includes('!important'), 'clean.css uses !important for instant vanish');
   ok(css.includes('#psc-toast'), 'toast styled in css');
+}
+
+/* ================= BUG-HUNT REGRESSIONS (v1.3) ================= */
+
+/* ---------- 25. BUG: fresh not-yet-loaded video was uncontrollable ---------- */
+group('25. REGRESSION: fresh video (readyState 0) still controlled');
+{
+  const p = createPage();
+  const v = p.doc.createElement('video');      // no readyState patch -> 0, paused
+  p.doc.body.appendChild(v);
+  p.press('ArrowUp');
+  eq(v.playbackRate, 2, 'unloaded video still gets 2x (fallback to any video)');
+  p.advance(500);                              // gap so this is NOT a combo
+  const preventedDown = p.press('ArrowDown');
+  eq(v.playbackRate, 1, 'unloaded video gets 1x too');
+  eq(preventedDown, true, 'arrow still intercepted when a video exists');
+}
+
+/* ---------- 26. BUG: video inside same-origin iframe was unreachable ---------- */
+group('26. REGRESSION: same-origin iframe video controlled');
+{
+  const p = createPage();
+  const iframe = p.doc.createElement('iframe');
+  p.doc.body.appendChild(iframe);
+  const idoc = iframe.contentDocument;
+  ok(!!idoc, 'iframe document accessible in test');
+  const v = idoc.createElement('video');
+  Object.defineProperty(v, 'readyState', { value: 2, configurable: true });
+  idoc.body.appendChild(v);
+  p.press('ArrowUp');                          // key pressed on TOP page
+  eq(v.playbackRate, 2, 'iframe video gets 2x from top-page arrow');
+}
+
+/* ---------- 27. BUG: toast invisible in fullscreen ---------- */
+group('27. REGRESSION: toast visible in fullscreen');
+{
+  const p = createPage();
+  const wrapper = p.doc.createElement('div');
+  const v = p.addVideo({ playing: true });
+  wrapper.appendChild(v);
+  p.doc.body.appendChild(wrapper);
+
+  p.press('ArrowUp');
+  ok(p.toastText() && p.doc.body.contains(p.doc.querySelector('#psc-toast')),
+     'normal mode: toast lives in body');
+
+  /* enter fullscreen on the player wrapper */
+  Object.defineProperty(p.doc, 'fullscreenElement',
+    { get: () => wrapper, configurable: true });
+  p.advance(500);
+  p.press('ArrowDown');
+  eq(p.doc.querySelector('#psc-toast').parentNode, wrapper,
+     'fullscreen: toast moved INSIDE fullscreen element (body not rendered)');
+  eq(p.doc.querySelectorAll('#psc-toast').length, 1,
+     'no orphan/duplicate toasts leaked');
+
+  /* exit fullscreen */
+  Object.defineProperty(p.doc, 'fullscreenElement',
+    { get: () => null, configurable: true });
+  p.advance(500);
+  p.press('ArrowUp');
+  eq(p.doc.querySelector('#psc-toast').parentNode, p.doc.body,
+     'after exiting fullscreen: toast back in body');
+  eq(p.doc.querySelectorAll('#psc-toast').length, 1,
+     'still exactly one toast element');
+}
+
+/* ---------- 28. BUG: float jitter caused false snap/adopt ---------- */
+group('28. REGRESSION: float-tolerant speed comparison');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');                              // desired 2x
+  p.siteSetsSpeed(v, 2.00005);                     // tiny browser jitter within lock
+  eq(v.playbackRate, 2.00005, 'jitter within EPS not treated as override (no snap)');
+  p.siteSetsSpeed(v, 1.98);                        // real override within lock
+  eq(v.playbackRate, 2, 'real override still snapped back to 2x');
+}
+
+/* ---------- 29. BUG: clean view could blank the whole player ---------- */
+group('29. REGRESSION: clean view protects video-wrapping containers');
+{
+  const css = fs.readFileSync(
+    path.join(__dirname, '..', 'PW-Speed-Controller', 'clean.css'), 'utf8');
+  const generic = css.match(/\[class\*="toggle"\][^\n]*/g) || [];
+  ok(generic.length > 0 && generic.every(s => s.includes(':not(:has(video))')),
+     'generic toggle selectors guard ancestors of video (:not(:has(video)))');
+  ok((css.match(/:not\(:has\(video\)\)/g) || []).length >= 10,
+     'all clutter selector groups carry the wrapper guard');
+}
+
+/* ---------- 30. Fast-path sanity: top-level video wins, no deep walk needed ---------- */
+group('30. Fast path: top-level video controlled instantly');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });        // plain top-level video
+  p.press('ArrowUp');
+  eq(v.playbackRate, 2, 'top-level video 2x via fast path');
+  p.press('t');
+  eq(p.isClean(), true, 'clean toggle unaffected by video lookup changes');
 }
 
 /* ================= summary ================= */

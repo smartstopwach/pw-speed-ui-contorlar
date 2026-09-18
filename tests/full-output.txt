@@ -115,7 +115,35 @@
   ✅ clean.css uses !important for instant vanish
   ✅ toast styled in css
 
+━━━ 25. REGRESSION: fresh video (readyState 0) still controlled ━━━
+  ✅ unloaded video still gets 2x (fallback to any video)
+  ✅ unloaded video gets 1x too
+  ✅ arrow still intercepted when a video exists
+
+━━━ 26. REGRESSION: same-origin iframe video controlled ━━━
+  ✅ iframe document accessible in test
+  ✅ iframe video gets 2x from top-page arrow
+
+━━━ 27. REGRESSION: toast visible in fullscreen ━━━
+  ✅ normal mode: toast lives in body
+  ✅ fullscreen: toast moved INSIDE fullscreen element (body not rendered)
+  ✅ no orphan/duplicate toasts leaked
+  ✅ after exiting fullscreen: toast back in body
+  ✅ still exactly one toast element
+
+━━━ 28. REGRESSION: float-tolerant speed comparison ━━━
+  ✅ jitter within EPS not treated as override (no snap)
+  ✅ real override still snapped back to 2x
+
+━━━ 29. REGRESSION: clean view protects video-wrapping containers ━━━
+  ✅ generic toggle selectors guard ancestors of video (:not(:has(video)))
+  ✅ all clutter selector groups carry the wrapper guard
+
+━━━ 30. Fast path: top-level video controlled instantly ━━━
+  ✅ top-level video 2x via fast path
+  ✅ clean toggle unaffected by video lookup changes
+
 ════════════════════════════════════
-  RESULT: 68 passed, 0 failed
+  RESULT: 84 passed, 0 failed
   ALL FEATURES WORKING ✅
 ════════════════════════════════════

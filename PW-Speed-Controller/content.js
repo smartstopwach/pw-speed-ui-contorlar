@@ -1,5 +1,5 @@
 /* ============================================================
- * PW Speed Controller + Clean View  —  content script (v1.1)
+ * PW Speed Controller + Clean View  —  content script (v1.3)
  * ------------------------------------------------------------
  *  UP ARROW    -> lecture/video continues at 2x
  *  DOWN ARROW  -> lecture/video continues at 1x
@@ -28,6 +28,7 @@
 
   const CLEAN_CLASS = 'psc-clean';
   const STORE_KEY   = 'psc_clean_' + location.host;
+  const EPS         = 0.001;   // float tolerance when comparing speeds
 
   /* speed-lock state */
   let desiredSpeed = null;   // last speed chosen via arrows (or adopted manually)
@@ -52,13 +53,33 @@
     return out;
   }
 
-  /* ---- pick the video that is actually playing (or first usable) ---- */
+  /* ---- collect candidate <video> elements, cheap paths first ----
+   * 1) fast native search in this document (no full-tree walk)
+   * 2) shadow-DOM deep walk only if nothing found
+   * 3) same-origin iframes (embedded lecture players) as last resort */
+  function findVideos() {
+    let vids = Array.from(document.querySelectorAll('video'));
+    if (vids.length) return vids;                       // fast path
+    vids = deepQueryAll('video');
+    if (vids.length) return vids;
+    try {
+      document.querySelectorAll('iframe').forEach(f => {
+        try {
+          if (f.contentDocument) vids.push(...f.contentDocument.querySelectorAll('video'));
+        } catch (e) { /* cross-origin iframe -> skip */ }
+      });
+    } catch (e) {}
+    return vids;
+  }
+
+  /* ---- pick the playing video; fall back to ANY video present ----
+   * (a just-inserted video with readyState 0 must still be controllable) */
   function getActiveVideo() {
-    const vids = deepQueryAll('video').filter(v =>
-      v.readyState > 0 || !v.paused || v.videoWidth > 0
-    );
+    const vids = findVideos();
     if (!vids.length) return null;
-    return vids.find(v => !v.paused && !v.ended) || vids[0];
+    const usable = vids.filter(v => v.readyState > 0 || !v.paused || v.videoWidth > 0);
+    const pool = usable.length ? usable : vids;
+    return pool.find(v => !v.paused && !v.ended) || pool[0];
   }
 
   /* ---- don't steal keys while the user is typing ---- */
@@ -74,11 +95,18 @@
   /* ---------------- tiny on-screen toast ---------------- */
   let toast = null, toastTimer = null;
   function showToast(msg) {
+    /* In fullscreen the page <body> is not rendered — the toast must live
+     * inside the fullscreen element instead (unless that element IS the
+     * raw <video>, whose children never render). Re-parenting MOVES the
+     * same node, so no orphan/duplicate toasts are ever left behind. */
+    const fsEl = document.fullscreenElement;
+    const parent = (fsEl && fsEl.tagName !== 'VIDEO') ? fsEl
+                 : (document.body || document.documentElement);
     if (!toast || !toast.isConnected) {
       toast = document.createElement('div');
       toast.id = 'psc-toast';
-      (document.body || document.documentElement).appendChild(toast);
     }
+    if (toast.parentNode !== parent) parent.appendChild(toast);
     toast.textContent = msg;
     toast.classList.add('psc-show');
     clearTimeout(toastTimer);
@@ -118,7 +146,7 @@
     if (desiredSpeed === null) return;
 
     const now = Date.now();
-    if (v.playbackRate === desiredSpeed) return;   // nothing to fix
+    if (Math.abs(v.playbackRate - desiredSpeed) < EPS) return;   // nothing to fix
 
     if (now < lockUntil) {
       /* The site (e.g. player click re-applying its stored 1.5x) tried
