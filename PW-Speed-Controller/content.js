@@ -1,10 +1,14 @@
 /* ============================================================
- * PW Speed Controller + Clean View  —  content script
+ * PW Speed Controller + Clean View  —  content script (v1.1)
  * ------------------------------------------------------------
  *  UP ARROW    -> lecture/video continues at 2x
  *  DOWN ARROW  -> lecture/video continues at 1x
- *  Manual speed change in the player -> left untouched (STAYS)
- *  After a manual change, UP/DOWN takes over again (2x / 1x)
+ *  After an arrow press the speed is LOCKED for 3 seconds:
+ *  if the site (e.g. a click on the player re-applying its own
+ *  stored speed, like 1.5x) tries to change it in that window,
+ *  it is snapped back to your chosen speed instantly.
+ *  A manual speed change made AFTER the lock window is
+ *  respected — and adopted as the new desired speed.
  *  "T" key     -> instantly hide ALL clutter toggles/overlays
  *  "T" again   -> bring them back
  * ========================================================== */
@@ -12,13 +16,19 @@
   'use strict';
 
   /* ------------------ USER CONFIG (edit freely) ------------------ */
-  const UP_SPEED   = 2.0;   // speed when UP arrow is pressed
-  const DOWN_SPEED = 1.0;   // speed when DOWN arrow is pressed
-  const CLEAN_KEY  = 't';   // key that toggles clean view
+  const UP_SPEED    = 2.0;   // speed when UP arrow is pressed
+  const DOWN_SPEED  = 1.0;   // speed when DOWN arrow is pressed
+  const CLEAN_KEY   = 't';   // key that toggles clean view
+  const LOCK_MS     = 3000;  // snap-back window after each arrow press
   /* --------------------------------------------------------------- */
 
   const CLEAN_CLASS = 'psc-clean';
   const STORE_KEY   = 'psc_clean_' + location.host;
+
+  /* speed-lock state */
+  let desiredSpeed = null;   // last speed chosen via arrows (or adopted manually)
+  let lockUntil    = 0;      // timestamp until which we fight site interference
+  let lastSnapToast = 0;
 
   /* ---- find every <video>, even inside shadow roots ---- */
   function deepQueryAll(selector, root) {
@@ -84,6 +94,53 @@
     });
   } catch (e) {}
 
+  /* ---------------- speed application + lock ---------------- */
+  function lockInSpeed(v, rate) {
+    desiredSpeed = rate;
+    lockUntil = Date.now() + LOCK_MS;
+    v.playbackRate = rate;
+    v.defaultPlaybackRate = rate;
+    showToast((rate > 1 ? '⏩ ' : '▶ ') + rate + '× speed 🔒');
+  }
+
+  /* Watch every speed change (capture: works even though media events
+   * don't bubble). Decides: site interference -> snap back, or genuine
+   * manual change -> respect & adopt it. */
+  window.addEventListener('ratechange', (e) => {
+    const v = e.target;
+    if (!v || v.tagName !== 'VIDEO') return;
+    if (desiredSpeed === null) return;
+
+    const now = Date.now();
+    if (v.playbackRate === desiredSpeed) return;   // nothing to fix
+
+    if (now < lockUntil) {
+      /* The site (e.g. player click re-applying its stored 1.5x) tried
+       * to override our speed right after the key press -> snap back. */
+      v.playbackRate = desiredSpeed;
+      v.defaultPlaybackRate = desiredSpeed;
+      if (now - lastSnapToast > 1500) {
+        lastSnapToast = now;
+        showToast('🔒 ' + desiredSpeed + '× kept');
+      }
+    } else {
+      /* Lock window over -> user changed speed deliberately.
+       * Respect it AND adopt it so we never fight them again. */
+      desiredSpeed = v.playbackRate;
+    }
+  }, true);
+
+  /* If a fresh video loads/resets speed while the lock is still hot,
+   * push our speed back onto it. */
+  window.addEventListener('loadedmetadata', (e) => {
+    const v = e.target;
+    if (!v || v.tagName !== 'VIDEO') return;
+    if (desiredSpeed !== null && Date.now() < lockUntil) {
+      v.playbackRate = desiredSpeed;
+      v.defaultPlaybackRate = desiredSpeed;
+    }
+  }, true);
+
   /* ---------------- keyboard control ---------------- */
   window.addEventListener('keydown', (e) => {
     if (e.isComposing || isTypingTarget(e.target)) return;
@@ -95,11 +152,8 @@
       const rate = (e.key === 'ArrowUp') ? UP_SPEED : DOWN_SPEED;
 
       e.preventDefault();
-      e.stopImmediatePropagation();        // block page scroll / YT volume
-
-      v.playbackRate = rate;               // one-shot: manual changes later stay untouched
-      v.defaultPlaybackRate = rate;
-      showToast((rate > 1 ? '⏩ ' : '▶ ') + rate + '× speed');
+      e.stopImmediatePropagation();        // block page scroll / YT volume / site's own key handlers
+      lockInSpeed(v, rate);
       return;
     }
 

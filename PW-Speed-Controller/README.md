@@ -6,9 +6,10 @@ A tiny Chrome extension for Physics Wallah (pw.live) and YouTube lectures.
 
 | Shortcut | Action |
 |---|---|
-| **↑ Up Arrow** | Video continues at **2×** speed |
-| **↓ Down Arrow** | Video continues at **1×** speed |
-| Manual speed change in player | Respected — nothing overrides it |
+| **↑ Up Arrow** | Video continues at **2×** speed (locked 🔒 for 3s) |
+| **↓ Down Arrow** | Video continues at **1×** speed (locked 🔒 for 3s) |
+| ↑/↓ + clicking the player | Speed stays at your choice — the player's own stored speed (e.g. 1.5×) can't override you |
+| Manual speed change in player | Respected — after the 3s lock, your manual speed is adopted, nothing overrides it |
 | After manual, press ↑ / ↓ | Takes over again → **2×** / **1×** |
 | **T** | **Instantly hides** all clutter toggles (skip arrows, top toggle bar, gesture flashes) |
 | **T** again | Toggles come back instantly |
