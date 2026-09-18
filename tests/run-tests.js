@@ -1,0 +1,439 @@
+/* ================================================================
+ *  PW Speed Controller — automated feature test-suite (v1.2)
+ *  Simulates real pages (YouTube / PW style) with jsdom and runs
+ *  the REAL content.js against keyboard + player events.
+ *  Run:  node run-tests.js
+ * ================================================================ */
+'use strict';
+
+const fs   = require('fs');
+const path = require('path');
+const { JSDOM } = require('jsdom');
+
+const CONTENT_JS = path.join(__dirname, '..', 'PW-Speed-Controller', 'content.js');
+const SRC = fs.readFileSync(CONTENT_JS, 'utf8');
+
+/* ---------- tiny assertion framework ---------- */
+let passed = 0, failed = 0;
+const failures = [];
+function ok(cond, name, extra) {
+  if (cond) { passed++; console.log('  ✅ ' + name); }
+  else { failed++; failures.push(name); console.log('  ❌ ' + name + (extra ? '  -> ' + extra : '')); }
+}
+function eq(got, want, name) {
+  ok(Object.is(got, want), name, 'expected ' + want + ', got ' + got);
+}
+function group(title) { console.log('\n━━━ ' + title + ' ━━━'); }
+
+/* ---------- page factory: fresh jsdom "site" + extension injected ---------- */
+let START_TIME = 1_000_000;
+
+function chromeMock() {
+  return {
+    storage: {
+      local: {
+        _data: {},
+        get(key, cb) { cb(this._data); },
+        set(obj) { Object.assign(this._data, obj); }
+      }
+    }
+  };
+}
+
+function createPage({ url = 'https://www.youtube.com/watch?v=test', prefillClean = false } = {}) {
+  const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+    url,
+    runScripts: 'outside-only',
+    pretendToBeVisual: true
+  });
+  const win = dom.window;
+  const doc = win.document;
+
+  win.__fakeNow = START_TIME;
+  win.eval('Date.now = function(){ return window.__fakeNow; };');
+
+  win.chrome = chromeMock();
+  if (prefillClean) win.chrome.storage.local._data['psc_clean_' + win.location.host] = true;
+
+  /* helpers */
+  const page = { win, doc, dom };
+  page.advance = (ms) => { win.__fakeNow += ms; };
+  page.now = () => win.__fakeNow;
+
+  page.addVideo = ({ playing = false, shadowHost = null } = {}) => {
+    const v = doc.createElement('video');
+    Object.defineProperty(v, 'readyState', { value: 2, configurable: true });
+    if (playing) {
+      Object.defineProperty(v, 'paused', { get: () => false, configurable: true });
+      Object.defineProperty(v, 'currentTime', { get: () => 5, configurable: true });
+    }
+    (shadowHost ? shadowHost.shadowRoot : doc.body).appendChild(v);
+    return v;
+  };
+
+  page.addShadowVideo = ({ playing = false } = {}) => {
+    const host = doc.createElement('div');
+    host.attachShadow({ mode: 'open' });
+    doc.body.appendChild(host);
+    return page.addVideo({ playing, shadowHost: host });
+  };
+
+  page.press = (key, { target = null, ctrlKey = false, metaKey = false, altKey = false, repeat = false } = {}) => {
+    const ev = new win.KeyboardEvent('keydown', {
+      key, bubbles: true, cancelable: true,
+      ctrlKey, metaKey, altKey, repeat, isComposing: false
+    });
+    (target || win).dispatchEvent(ev);
+    return ev.defaultPrevented;
+  };
+
+  /* site forcibly changes speed (like PW player re-applying its stored 1.5x) */
+  page.siteSetsSpeed = (video, rate) => {
+    video.playbackRate = rate;
+    video.dispatchEvent(new win.Event('ratechange'));
+  };
+
+  page.loaded = (video) => video.dispatchEvent(new win.Event('loadedmetadata'));
+  page.toastText = () => { const t = doc.querySelector('#psc-toast'); return t && t.isConnected ? t.textContent : null; };
+  page.isClean = () => doc.documentElement.classList.contains('psc-clean');
+
+  win.eval(SRC);   // inject the real extension content script
+  return page;
+}
+
+/* ================================================================
+ *  TEST GROUPS
+ * ================================================================ */
+
+/* ---------- 1. UP arrow = 2x ---------- */
+group('1. UP arrow sets & keeps 2x');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  const prevented = p.press('ArrowUp');
+  eq(v.playbackRate, 2, 'ArrowUp -> playbackRate 2x');
+  eq(v.defaultPlaybackRate, 2, 'defaultPlaybackRate also 2x');
+  eq(prevented, true, 'default browser behaviour (scroll) prevented');
+  ok(p.toastText() && p.toastText().includes('2×'), 'toast shows 2× speed', p.toastText());
+}
+
+/* ---------- 2. DOWN arrow = 1x ---------- */
+group('2. DOWN arrow sets 1x');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  v.playbackRate = 2;
+  p.press('ArrowDown');
+  eq(v.playbackRate, 1, 'ArrowDown -> playbackRate 1x');
+  ok(p.toastText() && p.toastText().includes('1×'), 'toast shows 1×');
+}
+
+/* ---------- 3. Combo UP then DOWN = 1.5x ---------- */
+group('3. Combo ↑ then ↓ (within 200ms) = 1.5x');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  p.advance(120);               // < 200ms gap
+  p.press('ArrowDown');
+  eq(v.playbackRate, 1.5, 'combo up+down -> 1.5x');
+  ok(p.toastText() && p.toastText().includes('combo'), 'toast says combo', p.toastText());
+}
+
+/* ---------- 4. Combo DOWN then UP = 1.5x (order independent) ---------- */
+group('4. Combo ↓ then ↑ also = 1.5x');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowDown');
+  p.advance(150);
+  p.press('ArrowUp');
+  eq(v.playbackRate, 1.5, 'combo down+up -> 1.5x');
+}
+
+/* ---------- 5. Slow gap = NO combo (normal behaviour) ---------- */
+group('5. Gap > 200ms -> no combo, second arrow acts normally');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  p.advance(400);               // > 200ms
+  p.press('ArrowDown');
+  eq(v.playbackRate, 1, 'slow gap -> plain 1x (no combo)');
+}
+
+/* ---------- 6. After combo, single arrow works again ---------- */
+group('6. After combo, plain UP = 2x');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp'); p.advance(100); p.press('ArrowDown');   // combo -> 1.5
+  p.advance(100);                                             // arrow arrives quickly after combo
+  p.press('ArrowUp');
+  eq(v.playbackRate, 2, 'plain UP after combo -> 2x');
+}
+
+/* ---------- 7. Holding UP (key repeat) stays 2x, no combo ---------- */
+group('7. Holding UP (auto-repeat) stays 2x');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  p.advance(50); p.press('ArrowUp', { repeat: true });
+  p.advance(50); p.press('ArrowUp', { repeat: true });
+  eq(v.playbackRate, 2, 'repeated UP keeps 2x');
+  ok(p.toastText() && !p.toastText().includes('combo'), 'no combo toast on hold');
+}
+
+/* ---------- 8. THE BUG: click/override after UP must not drop to 1.5x ---------- */
+group('8. BUG FIX: ↑ + player click at same time stays 2x (no 1.5x drop)');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');                       // user presses UP (2x + lock)
+  p.advance(30);                            // "click" happens -> site forces 1.5x
+  p.siteSetsSpeed(v, 1.5);
+  eq(v.playbackRate, 2, 'site tried 1.5x -> snapped back to 2x');
+  ok(p.toastText() && p.toastText().includes('kept'), 'toast says speed kept', p.toastText());
+  p.advance(200);
+  p.siteSetsSpeed(v, 1.75);                 // site tries again inside lock
+  eq(v.playbackRate, 2, 'second override attempt also blocked');
+}
+
+/* ---------- 9. Manual change AFTER lock expires is respected ---------- */
+group('9. Manual speed change after lock window respected & adopted');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  eq(v.playbackRate, 2, 'precondition: 2x set');
+  p.advance(3100);                          // lock (3s) expired
+  p.siteSetsSpeed(v, 1.75);                 // user picks 1.75x in player UI
+  eq(v.playbackRate, 1.75, 'manual 1.75x stays after lock expiry');
+  p.siteSetsSpeed(v, 1.25);                 // another manual tweak
+  eq(v.playbackRate, 1.25, 'subsequent manual tweak also stays');
+}
+
+/* ---------- 10. After manual, arrows take over again ---------- */
+group('10. After manual change, UP arrow takes control again');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  p.advance(3100);
+  p.siteSetsSpeed(v, 1.25);                 // manual
+  p.press('ArrowUp');                       // arrows take over (gap>200ms from last arrow)
+  eq(v.playbackRate, 2, 'UP after manual -> 2x again');
+  p.advance(3500);
+  p.siteSetsSpeed(v, 1.5);                  // manual again
+  p.advance(10);
+  p.press('ArrowDown');
+  eq(v.playbackRate, 1, 'DOWN after manual -> 1x again');
+}
+
+/* ---------- 11. Full lock lifecycle on DOWN ---------- */
+group('11. Lock lifecycle for 1x');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  v.playbackRate = 2;
+  p.press('ArrowDown');
+  p.siteSetsSpeed(v, 2);                    // site tries to push back 2x inside lock
+  eq(v.playbackRate, 1, 'lock keeps 1x against site override');
+  p.advance(3100);
+  p.siteSetsSpeed(v, 1.5);                  // manual after expiry
+  eq(v.playbackRate, 1.5, 'after expiry manual wins');
+}
+
+/* ---------- 12. Typing guard ---------- */
+group('12. Shortcuts ignored while typing');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  v.playbackRate = 1.5;
+  const input = p.doc.createElement('input');
+  p.doc.body.appendChild(input);
+  const preventedUp = p.press('ArrowUp', { target: input });
+  const preventedT  = p.press('t',       { target: input });
+  eq(v.playbackRate, 1.5, 'ArrowUp inside <input> does NOT change speed');
+  eq(preventedUp, false, 'ArrowUp not prevented while typing');
+  eq(preventedT, false, 'T not prevented while typing');
+  eq(p.isClean(), false, 'clean view not toggled while typing');
+
+  const ta = p.doc.createElement('textarea');
+  p.doc.body.appendChild(ta);
+  p.press('ArrowDown', { target: ta });
+  eq(v.playbackRate, 1.5, 'ArrowDown inside <textarea> also ignored');
+
+  const editable = p.doc.createElement('div');
+  Object.defineProperty(editable, 'isContentEditable', { value: true });
+  p.doc.body.appendChild(editable);
+  p.press('ArrowUp', { target: editable });
+  eq(v.playbackRate, 1.5, 'contenteditable also ignored');
+}
+
+/* ---------- 13. Other keys untouched ---------- */
+group('13. Unrelated keys pass through');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  eq(p.press('ArrowLeft'), false, 'ArrowLeft not intercepted');
+  eq(p.press('ArrowRight'), false, 'ArrowRight not intercepted');
+  eq(p.press(' '), false, 'Space not intercepted');
+  eq(v.playbackRate, 1, 'speed untouched by other keys');
+}
+
+/* ---------- 14. No video on page -> arrows ignored ---------- */
+group('14. No video present -> arrows not intercepted');
+{
+  const p = createPage();
+  eq(p.press('ArrowUp'), false, 'ArrowUp not prevented when no video');
+  eq(p.press('ArrowDown'), false, 'ArrowDown not prevented when no video');
+}
+
+/* ---------- 15. Multiple videos -> playing one controlled ---------- */
+group('15. Multiple videos -> the playing one is controlled');
+{
+  const p = createPage();
+  const paused  = p.addVideo({ playing: false });
+  const playing = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  eq(playing.playbackRate, 2, 'playing video gets 2x');
+  eq(paused.playbackRate, 1, 'paused video untouched');
+}
+
+/* ---------- 16. Video inside Shadow DOM ---------- */
+group('16. Video inside shadow root still controlled');
+{
+  const p = createPage();
+  const v = p.addShadowVideo({ playing: true });
+  p.press('ArrowUp');
+  eq(v.playbackRate, 2, 'shadow-DOM video gets 2x');
+}
+
+/* ---------- 17. Clean view toggle ---------- */
+group('17. "t" hides toggles, "t" again brings them back');
+{
+  const p = createPage();
+  const clutter = p.doc.createElement('div');
+  clutter.className = 'player-toggle-bar';
+  p.doc.body.appendChild(clutter);
+
+  eq(p.isClean(), false, 'starts not-clean');
+  const prevented = p.press('t');
+  eq(p.isClean(), true, 'first T -> clean mode ON');
+  eq(prevented, true, 'T key default prevented');
+  ok(p.toastText() && p.toastText().includes('Clean view ON'), 'toast: clean ON', p.toastText());
+
+  p.press('t');
+  eq(p.isClean(), false, 'second T -> toggles back');
+  ok(p.toastText() && p.toastText().includes('visible again'), 'toast: visible again');
+
+  p.press('T');                             // capital T also works
+  eq(p.isClean(), true, 'capital T also toggles clean view');
+}
+
+/* ---------- 18. T with modifiers NOT hijacked ---------- */
+group('18. Ctrl/Cmd+T not hijacked');
+{
+  const p = createPage();
+  const prevented = p.press('t', { ctrlKey: true });
+  eq(p.isClean(), false, 'Ctrl+T does not toggle clean view');
+  eq(prevented, false, 'Ctrl+T not prevented (browser new-tab safe)');
+}
+
+/* ---------- 19. Clean mode remembered per site ---------- */
+group('19. Clean view restored per site on next visit');
+{
+  const p = createPage();
+  p.press('t');                                  // enable clean
+  const saved = p.win.chrome.storage.local._data['psc_clean_' + p.win.location.host];
+  eq(saved, true, 'clean state saved to storage');
+
+  const p2 = createPage({ prefillClean: true }); // new page load, storage prefilled
+  eq(p2.isClean(), true, 'clean auto-reapplied on new page visit');
+}
+
+/* ---------- 20. loadedmetadata during lock ---------- */
+group('20. New video load during lock gets desired speed');
+{
+  const p = createPage();
+  const v1 = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  p.advance(500);                                  // still inside lock
+  const v2 = p.addVideo({ playing: true });        // SPA swaps to a fresh <video>
+  p.loaded(v2);
+  eq(v2.playbackRate, 2, 'fresh video inherits 2x during lock');
+
+  p.advance(3000);                                 // lock expired now
+  const v3 = p.addVideo({ playing: true });
+  p.loaded(v3);
+  eq(v3.playbackRate, 1, 'after lock, fresh video NOT speed-forced');
+}
+
+/* ---------- 21. stopImmediatePropagation beats site handlers ---------- */
+group('21. Site key handlers blocked for arrows');
+{
+  const p = createPage();
+  p.addVideo({ playing: true });
+  let siteSawArrow = 0, siteSawOther = 0;
+  p.win.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp') siteSawArrow++;
+    if (e.key === 'ArrowLeft') siteSawOther++;
+  }, true);
+  p.press('ArrowUp');
+  p.press('ArrowLeft');
+  eq(siteSawArrow, 0, "site's own ArrowUp handler never runs");
+  eq(siteSawOther, 1, 'unrelated keys still reach the site');
+}
+
+/* ---------- 22. Ratechange with same value = no-op (no crash loops) ---------- */
+group('22. ratechange with same speed = harmless no-op');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  v.dispatchEvent(new p.win.Event('ratechange'));  // no actual change
+  eq(v.playbackRate, 2, 'still 2x, no misbehaviour');
+}
+
+/* ---------- 23. pw.live page works too ---------- */
+group('23. Works on pw.live lectures');
+{
+  const p = createPage({ url: 'https://www.pw.live/study/batches/batch-123/video' });
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  eq(v.playbackRate, 2, '2x on pw.live');
+  p.advance(500);                                // gap > COMBO_MS so next pair is a fresh combo
+  p.press('ArrowDown'); p.advance(50); p.press('ArrowUp');
+  eq(v.playbackRate, 1.5, 'combo 1.5x on pw.live');
+  p.press('t');
+  eq(p.isClean(), true, 'clean view on pw.live');
+}
+
+/* ---------- 24. Static / packaging checks ---------- */
+group('24. Static & packaging checks');
+{
+  const root = path.join(__dirname, '..', 'PW-Speed-Controller');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  eq(manifest.manifest_version, 3, 'manifest v3');
+  ok(manifest.content_scripts[0].matches.some(m => m.includes('youtube.com')), 'YouTube match declared');
+  ok(manifest.content_scripts[0].matches.some(m => m.includes('pw.live')), 'pw.live match declared');
+  for (const f of [...manifest.content_scripts[0].js, ...manifest.content_scripts[0].css]) {
+    ok(fs.existsSync(path.join(root, f)), 'content file exists: ' + f);
+  }
+  for (const size of ['16', '48', '128']) {
+    ok(fs.existsSync(path.join(root, 'icons', 'icon' + size + '.png')), 'icon' + size + '.png exists');
+  }
+  const css = fs.readFileSync(path.join(root, 'clean.css'), 'utf8');
+  ok(css.includes('.psc-clean'), 'clean.css hides under .psc-clean');
+  ok(css.includes('!important'), 'clean.css uses !important for instant vanish');
+  ok(css.includes('#psc-toast'), 'toast styled in css');
+}
+
+/* ================= summary ================= */
+console.log('\n════════════════════════════════════');
+console.log(`  RESULT: ${passed} passed, ${failed} failed`);
+if (failed) { console.log('  FAILURES:\n   - ' + failures.join('\n   - ')); process.exit(1); }
+console.log('  ALL FEATURES WORKING ✅');
+console.log('════════════════════════════════════');

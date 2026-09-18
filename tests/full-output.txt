@@ -1,0 +1,121 @@
+
+━━━ 1. UP arrow sets & keeps 2x ━━━
+  ✅ ArrowUp -> playbackRate 2x
+  ✅ defaultPlaybackRate also 2x
+  ✅ default browser behaviour (scroll) prevented
+  ✅ toast shows 2× speed
+
+━━━ 2. DOWN arrow sets 1x ━━━
+  ✅ ArrowDown -> playbackRate 1x
+  ✅ toast shows 1×
+
+━━━ 3. Combo ↑ then ↓ (within 200ms) = 1.5x ━━━
+  ✅ combo up+down -> 1.5x
+  ✅ toast says combo
+
+━━━ 4. Combo ↓ then ↑ also = 1.5x ━━━
+  ✅ combo down+up -> 1.5x
+
+━━━ 5. Gap > 200ms -> no combo, second arrow acts normally ━━━
+  ✅ slow gap -> plain 1x (no combo)
+
+━━━ 6. After combo, plain UP = 2x ━━━
+  ✅ plain UP after combo -> 2x
+
+━━━ 7. Holding UP (auto-repeat) stays 2x ━━━
+  ✅ repeated UP keeps 2x
+  ✅ no combo toast on hold
+
+━━━ 8. BUG FIX: ↑ + player click at same time stays 2x (no 1.5x drop) ━━━
+  ✅ site tried 1.5x -> snapped back to 2x
+  ✅ toast says speed kept
+  ✅ second override attempt also blocked
+
+━━━ 9. Manual speed change after lock window respected & adopted ━━━
+  ✅ precondition: 2x set
+  ✅ manual 1.75x stays after lock expiry
+  ✅ subsequent manual tweak also stays
+
+━━━ 10. After manual change, UP arrow takes control again ━━━
+  ✅ UP after manual -> 2x again
+  ✅ DOWN after manual -> 1x again
+
+━━━ 11. Lock lifecycle for 1x ━━━
+  ✅ lock keeps 1x against site override
+  ✅ after expiry manual wins
+
+━━━ 12. Shortcuts ignored while typing ━━━
+  ✅ ArrowUp inside <input> does NOT change speed
+  ✅ ArrowUp not prevented while typing
+  ✅ T not prevented while typing
+  ✅ clean view not toggled while typing
+  ✅ ArrowDown inside <textarea> also ignored
+  ✅ contenteditable also ignored
+
+━━━ 13. Unrelated keys pass through ━━━
+  ✅ ArrowLeft not intercepted
+  ✅ ArrowRight not intercepted
+  ✅ Space not intercepted
+  ✅ speed untouched by other keys
+
+━━━ 14. No video present -> arrows not intercepted ━━━
+  ✅ ArrowUp not prevented when no video
+  ✅ ArrowDown not prevented when no video
+
+━━━ 15. Multiple videos -> the playing one is controlled ━━━
+  ✅ playing video gets 2x
+  ✅ paused video untouched
+
+━━━ 16. Video inside shadow root still controlled ━━━
+  ✅ shadow-DOM video gets 2x
+
+━━━ 17. "t" hides toggles, "t" again brings them back ━━━
+  ✅ starts not-clean
+  ✅ first T -> clean mode ON
+  ✅ T key default prevented
+  ✅ toast: clean ON
+  ✅ second T -> toggles back
+  ✅ toast: visible again
+  ✅ capital T also toggles clean view
+
+━━━ 18. Ctrl/Cmd+T not hijacked ━━━
+  ✅ Ctrl+T does not toggle clean view
+  ✅ Ctrl+T not prevented (browser new-tab safe)
+
+━━━ 19. Clean view restored per site on next visit ━━━
+  ✅ clean state saved to storage
+  ✅ clean auto-reapplied on new page visit
+
+━━━ 20. New video load during lock gets desired speed ━━━
+  ✅ fresh video inherits 2x during lock
+  ✅ after lock, fresh video NOT speed-forced
+
+━━━ 21. Site key handlers blocked for arrows ━━━
+  ✅ site's own ArrowUp handler never runs
+  ✅ unrelated keys still reach the site
+
+━━━ 22. ratechange with same speed = harmless no-op ━━━
+  ✅ still 2x, no misbehaviour
+
+━━━ 23. Works on pw.live lectures ━━━
+  ✅ 2x on pw.live
+  ✅ combo 1.5x on pw.live
+  ✅ clean view on pw.live
+
+━━━ 24. Static & packaging checks ━━━
+  ✅ manifest v3
+  ✅ YouTube match declared
+  ✅ pw.live match declared
+  ✅ content file exists: content.js
+  ✅ content file exists: clean.css
+  ✅ icon16.png exists
+  ✅ icon48.png exists
+  ✅ icon128.png exists
+  ✅ clean.css hides under .psc-clean
+  ✅ clean.css uses !important for instant vanish
+  ✅ toast styled in css
+
+════════════════════════════════════
+  RESULT: 68 passed, 0 failed
+  ALL FEATURES WORKING ✅
+════════════════════════════════════
