@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PW Speed Controller + Clean View",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Up Arrow = 2x speed, Down Arrow = 1x speed on PW/YouTube lectures. Manual speed changes are respected. Press T to hide/show all on-screen toggles for a clean view.",
   "permissions": ["storage"],
   "icons": {

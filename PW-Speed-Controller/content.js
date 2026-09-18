@@ -3,6 +3,7 @@
  * ------------------------------------------------------------
  *  UP ARROW    -> lecture/video continues at 2x
  *  DOWN ARROW  -> lecture/video continues at 1x
+ *  UP+DOWN together (almost same time) -> 1.5x combo
  *  After an arrow press the speed is LOCKED for 3 seconds:
  *  if the site (e.g. a click on the player re-applying its own
  *  stored speed, like 1.5x) tries to change it in that window,
@@ -18,8 +19,11 @@
   /* ------------------ USER CONFIG (edit freely) ------------------ */
   const UP_SPEED    = 2.0;   // speed when UP arrow is pressed
   const DOWN_SPEED  = 1.0;   // speed when DOWN arrow is pressed
+  const COMBO_SPEED = 1.5;   // speed when UP+DOWN pressed almost together
+  const COMBO_MS    = 200;   // max gap (ms) between the two arrows for combo
   const CLEAN_KEY   = 't';   // key that toggles clean view
   const LOCK_MS     = 3000;  // snap-back window after each arrow press
+
   /* --------------------------------------------------------------- */
 
   const CLEAN_CLASS = 'psc-clean';
@@ -29,6 +33,7 @@
   let desiredSpeed = null;   // last speed chosen via arrows (or adopted manually)
   let lockUntil    = 0;      // timestamp until which we fight site interference
   let lastSnapToast = 0;
+  let lastArrow    = { key: null, time: 0 };  // for the ↑+↓ combo = 1.5x
 
   /* ---- find every <video>, even inside shadow roots ---- */
   function deepQueryAll(selector, root) {
@@ -95,12 +100,13 @@
   } catch (e) {}
 
   /* ---------------- speed application + lock ---------------- */
-  function lockInSpeed(v, rate) {
+  function lockInSpeed(v, rate, combo) {
     desiredSpeed = rate;
     lockUntil = Date.now() + LOCK_MS;
     v.playbackRate = rate;
     v.defaultPlaybackRate = rate;
-    showToast((rate > 1 ? '⏩ ' : '▶ ') + rate + '× speed 🔒');
+    showToast(combo ? ('⚡ ' + rate + '× combo 🔒')
+                    : ((rate > 1 ? '⏩ ' : '▶ ') + rate + '× speed 🔒'));
   }
 
   /* Watch every speed change (capture: works even though media events
@@ -149,11 +155,23 @@
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       const v = getActiveVideo();
       if (!v) return;                      // no video -> leave default behaviour
-      const rate = (e.key === 'ArrowUp') ? UP_SPEED : DOWN_SPEED;
 
       e.preventDefault();
       e.stopImmediatePropagation();        // block page scroll / YT volume / site's own key handlers
-      lockInSpeed(v, rate);
+
+      const now = Date.now();
+      const other = (e.key === 'ArrowUp') ? 'ArrowDown' : 'ArrowUp';
+
+      /* ↑ and ↓ pressed almost together -> combo speed 1.5x */
+      if (!e.repeat && lastArrow.key === other && now - lastArrow.time <= COMBO_MS) {
+        lastArrow = { key: null, time: 0 };
+        lockInSpeed(v, COMBO_SPEED, true);
+        return;
+      }
+
+      if (!e.repeat) lastArrow = { key: e.key, time: now };
+      const rate = (e.key === 'ArrowUp') ? UP_SPEED : DOWN_SPEED;
+      lockInSpeed(v, rate, false);
       return;
     }
 

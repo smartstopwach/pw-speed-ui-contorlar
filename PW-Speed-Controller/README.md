@@ -8,6 +8,7 @@ A tiny Chrome extension for Physics Wallah (pw.live) and YouTube lectures.
 |---|---|
 | **↑ Up Arrow** | Video continues at **2×** speed (locked 🔒 for 3s) |
 | **↓ Down Arrow** | Video continues at **1×** speed (locked 🔒 for 3s) |
+| **↑ + ↓ almost together** | **1.5× combo** speed (within 200ms of each other) |
 | ↑/↓ + clicking the player | Speed stays at your choice — the player's own stored speed (e.g. 1.5×) can't override you |
 | Manual speed change in player | Respected — after the 3s lock, your manual speed is adopted, nothing overrides it |
 | After manual, press ↑ / ↓ | Takes over again → **2×** / **1×** |
