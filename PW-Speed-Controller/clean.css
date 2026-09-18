@@ -1,0 +1,81 @@
+/* ============================================================
+   Clean View — everything hidden while <html class="psc-clean">
+   Press "T" to toggle. Add more selectors at the bottom if any
+   toggle on your PW batch page still shows up.
+   ============================================================ */
+
+/* ---------- YouTube clutter ---------- */
+.psc-clean .ytp-chrome-top,                /* title bar, share, watch-later buttons */
+.psc-clean .ytp-gradient-top,
+.psc-clean .ytp-doubletap-ui-legacy,       /* left/right 10s arrow overlays */
+.psc-clean .ytp-doubletap-ui,
+.psc-clean .ytp-bezel,                     /* center play/pause flash icon */
+.psc-clean .ytp-bezel-text-wrapper,
+.psc-clean .ytp-cards-button,
+.psc-clean .ytp-ce-element,                /* end-screen cards */
+.psc-clean .ytp-paid-content-overlay {
+  display: none !important;
+}
+
+/* ---------- PW (pw.live) player clutter ---------- */
+.psc-clean [class*="player-options"],
+.psc-clean [class*="playerOptions"],
+.psc-clean [class*="top-options"],
+.psc-clean [class*="topOptions"],
+.psc-clean [class*="video-toggle"],
+.psc-clean [class*="videoToggle"],
+.psc-clean [class*="gesture"],
+.psc-clean [class*="Gesture"],
+.psc-clean [class*="seek-overlay"],
+.psc-clean [class*="seekOverlay"],
+.psc-clean [class*="seek-arrow"],
+.psc-clean [class*="seekArrow"],
+.psc-clean [class*="forward-10"],
+.psc-clean [class*="rewind-10"],
+.psc-clean [class*="skip-forward"],
+.psc-clean [class*="skip-backward"],
+.psc-clean [class*="skip-icon"],
+.psc-clean [class*="double-tap"],
+.psc-clean [class*="doubleTap"] {
+  display: none !important;
+}
+
+/* ---------- generic toggle chips / buttons floating over video ---------- */
+.psc-clean [class*="toggle"]:not(video):not(#psc-toast),
+.psc-clean [class*="Toggle"]:not(video):not(#psc-toast) {
+  display: none !important;
+}
+
+/* safety: never hide the actual video player or our toast */
+.psc-clean video,
+.psc-clean #movie_player,
+.psc-clean .html5-video-player,
+.psc-clean .video-js,
+.psc-clean #psc-toast {
+  display: block !important;
+}
+
+/* ADD YOUR OWN LINES HERE (example):
+.psc-clean .some-class-you-see,
+------------------------------------------------------------- */
+
+/* ---------------- toast (always visible) ---------------- */
+#psc-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 90px;
+  z-index: 2147483647;
+  background: rgba(15, 15, 15, 0.88);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font: 600 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+#psc-toast.psc-show {
+  opacity: 1;
+  transform: translateY(0);
+}
