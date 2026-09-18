@@ -1,8 +1,11 @@
 /* ============================================================
-   Clean View — everything hidden while <html class="psc-clean">
-   Press "T" to toggle. Add more selectors at the bottom if any
-   toggle on your PW batch page still shows up.
-   ============================================================ */
+   Clean View (v1.5) — class-based rules below are a fast
+   first-pass. The REAL hiding is done by content.js's universal
+   geometry engine: any element floating on top of the video is
+   tagged with [data-psc-hide] (works for obfuscated/shadow-DOM
+   players like PW's Ionic app). This file still instant-hides
+   the well-known stuff and styles the toast.
+============================================================ */
 
 /* ---------- YouTube clutter ---------- */
 .psc-clean .ytp-chrome-top,                /* title bar, share, watch-later buttons */

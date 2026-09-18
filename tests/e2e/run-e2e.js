@@ -337,6 +337,40 @@ const displayOf = (p, sel) => p.$eval(sel, el => getComputedStyle(el).display);
     await p.close();
   }
 
+  /* ============ E18. v1.5: class-agnostic hiding (the REAL PW bug) ============ */
+  group('E18. v1.5: obfuscated overlay hidden, captions + video survive');
+  {
+    const p = await newPageAt('e18.pw.live', 'pw-player.html');
+    await p.keyboard.press('t');
+    await sleep(500);
+    eq(await displayOf(p, '#obf-overlay'), 'none',
+       'random-class overlay hidden WITHOUT knowing its class name');
+    eq(await p.$eval('#obf-overlay', el => el.getAttribute('data-psc-hide')), '1',
+       'overlay tagged by geometry engine');
+    ok((await displayOf(p, '#cap')) !== 'none', 'captions stay visible');
+    ok((await displayOf(p, '.video-toggle-wrapper')) !== 'none', 'video wrapper stays visible');
+    const vVis = await p.$eval('#lec', v => !!(v.offsetWidth || v.offsetHeight));
+    eq(vVis, true, 'video fully visible');
+    await p.close();
+  }
+
+  /* ============ E19. v1.5: late-spawned overlay caught live ============ */
+  group('E19. v1.5: hover menu spawning AFTER clean ON vanishes too');
+  {
+    const p = await newPageAt('e19.pw.live', 'pw-player.html');
+    await p.keyboard.press('t');
+    await sleep(500);
+    await p.evaluate(() => window.spawnOverlay());   // menu appears DURING clean view
+    await sleep(900);                                 // watcher re-scan (350ms throttle)
+    eq(await displayOf(p, '#late-overlay'), 'none', 'late overlay auto-hidden by watcher');
+    await p.keyboard.press('t');                      // clean OFF
+    await sleep(400);
+    ok((await displayOf(p, '#late-overlay')) !== 'none', 'everything restored on OFF');
+    eq(await p.$eval('#obf-overlay', el => el.hasAttribute('data-psc-hide')), false,
+       'all attributes cleaned on OFF');
+    await p.close();
+  }
+
   /* ============ E16. fullscreen toast (soft-allowed) ============ */
   group('E16. fullscreen toast re-parents (if fullscreen available)');
   {

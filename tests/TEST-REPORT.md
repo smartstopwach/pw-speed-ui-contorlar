@@ -1,16 +1,16 @@
-# 🧪 Test Report — PW Speed Controller v1.4.2 (UNIT + TRUE E2E)
+# 🧪 Test Report — PW Speed Controller v1.5.0 (UNIT + TRUE E2E)
 
 **Date:** 2026-09-18
 **Layers:**
-1. **Unit (jsdom):** 123 assertions · 45 groups · simulated pages with full time control
-2. **E2E (REAL Chromium 131):** 36 assertions · 17 scenarios · real keyboard/CDP
+1. **Unit (jsdom):** 136 assertions · 50 groups · simulated pages with full time control
+2. **E2E (REAL Chromium 131):** 44 assertions · 19 scenarios · real keyboard/CDP
    pipeline, real media events, real CSS cascade, real per-origin storage — pages
    served as `pw.live` / `youtube.com` origins (`--host-resolver-rules`), real
    `content.js`/`clean.css` injected unmodified (document_start injection shim —
    sandbox network cannot fetch an extension-enabled Chrome; every browser CDN is
    blocked here, engine still 100% real Chromium)
 
-## ✅ UNIT: 123/123 PASSED · E2E: 36/36 PASSED — 159 checks, zero failures
+## ✅ UNIT: 136/136 PASSED · E2E: 44/44 PASSED — 180 checks, zero failures
 
 ## 🌐 E2E scenarios (real browser)
 | # | Scenario | Result |
@@ -35,8 +35,15 @@
 
 ---
 
-## 🐛➜🔧 Total bugs found & fixed: 18
+## 🐛➜🔧 Total bugs found & fixed: 20
 
+### Round v1.5.0 (USER-REPORTED: "T kahin kaam nahi kar raha" + screenshots)
+| # | Bug | Root cause | Fix |
+|---|---|---|---|
+| 19 | **Clean view kaam hi nahi kar raha tha real PW pe** (YouTube title bhi rehta tha) | Clean-view class-name CSS selectors pe tha — PW ke obfuscated classes + Ionic **shadow DOM** me CSS pahunchti hi nahi thi; toast dikhne se lagta tha ON hai par kuch hide nahi hota tha | **Universal geometry engine**: video ke rect se overlap karne wala HAR element `data-psc-hide` se hide — class-name agnostic, shadow-root ke andar style inject, MutationObserver se late overlays bhi; video/ancestors/captions/toast kabhi nahi chhoota |
+| 20 | v1.5 rewrite me `deepQueryAll` shadow-host traversal toot gaya (shadow video unreachable) | Do loops ko galat tarike se merge kiya tha — sirf matching elements ke shadow me ghus raha tha | Do loops wapas alag — **unit group 16 ne turant pakda** (suite works!) |
+
+### Round v1.4.2 (caught by REAL end-to-end test)
 ### Round v1.4.2 (caught by REAL end-to-end test)
 | # | Bug | Fix |
 |---|---|---|

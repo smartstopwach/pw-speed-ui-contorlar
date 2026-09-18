@@ -212,7 +212,30 @@
   ✅ no ghost-enforcement from the dead video
   ✅ ...and it never touches the live video either
 
+━━━ 46. v1.5: overlays hidden with NO class-name dependency ━━━
+  ✅ random-class overlay tagged & hidden
+  ✅ video-wrapping ancestor NEVER tagged
+  ✅ video itself NEVER tagged
+  ✅ hide <style> injected
+  ✅ second t -> attributes removed, overlay back
+  ✅ style tags cleaned up
+
+━━━ 47. v1.5: captions/subtitles stay visible ━━━
+  ✅ caption overlay NOT hidden
+
+━━━ 48. v1.5: our toast never hidden ━━━
+  ✅ toast NOT hidden in clean view
+
+━━━ 49. v1.5: works INSIDE shadow roots (PW Ionic style) ━━━
+  ✅ shadow-root overlay tagged
+  ✅ hide <style> injected INTO the shadow root
+  ✅ shadow host (ancestor) not tagged
+
+━━━ 50. v1.5: late overlays (hover menus) also vanish ━━━
+  ✅ late overlay caught by re-scan
+  ✅ all restored on off
+
 ════════════════════════════════════
-  RESULT: 123 passed, 0 failed
+  RESULT: 136 passed, 0 failed
   ALL FEATURES WORKING ✅
 ════════════════════════════════════

@@ -12,8 +12,8 @@ A tiny Chrome extension for Physics Wallah (pw.live) and YouTube lectures.
 | ↑/↓ + clicking the player | Speed stays at your choice — the player's own stored speed (e.g. 1.5×) can't override you |
 | Manual speed change in player | Respected — after the 3s lock, your manual speed is adopted, nothing overrides it |
 | After manual, press ↑ / ↓ | Takes over again → **2×** / **1×** |
-| **T** | **Instantly hides** all clutter toggles (skip arrows, top toggle bar, gesture flashes) |
-| **T** again | Toggles come back instantly |
+| **T** | **Clean view**: EVERY element floating over the video is hidden — class-agnostic, works inside shadow DOM too. Captions & video stay |
+| **T** again | Everything comes back instantly |
 
 Clean-view state is remembered per website, so your lectures stay clean next time.
 

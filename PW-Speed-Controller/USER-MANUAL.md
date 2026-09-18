@@ -20,8 +20,8 @@
 | **Player me manually speed change** karo | Aapki manual speed chalti rahegi — extension interfere **nahi** karega |
 | Manual ke baad **↑ / ↓ / combo** dabao | Extension wapas control le lega → 2× / 1× / 1.5× |
 | **Arrow + player pe click** ek saath | Befiker raho — speed aapki hi rahegi (site ka 1.5× override fail 🔒) |
-| **T** dabao | Saare toggles/clutter **turant gayab** 🧹 (clean view) |
-| **T** phir se dabao | Saare toggles **wapas aa jayenge** 👁 |
+| **T** dabao | Video ke upar ka **HAR cheez gayab** 🧹 — toggles, arrows, menus, junk (kisi bhi class/shadow DOM me ho — PW samet). **Captions aur video nahi** chhootega |
+| **T** phir se dabao | Sab kuch **wapas aa jayega** 👁 |
 
 ---
 

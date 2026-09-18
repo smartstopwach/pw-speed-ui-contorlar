@@ -6,6 +6,11 @@
   <div class="video-toggle-wrapper" style="position:relative; background:#000;">
     <video id="lec" src="/test.webm" controls muted width="640"></video>
     <div class="gesture-overlay" style="position:absolute;top:10px;left:10px;color:#fff;">◀ 10s | 10s ▶</div>
+    <!-- v1.5: class-AGNOSTIC overlay (obfuscated name like real PW) -->
+    <div id="obf-overlay" class="xq7-z9k" style="position:absolute;top:14px;right:14px;color:#ffd700;background:#333;padding:4px 10px;">⚙ ⭐ ⋮ obfuscated junk</div>
+    <!-- v1.5: captions must SURVIVE clean view -->
+    <div id="cap" class="caption-line" style="position:absolute;bottom:60px;left:180px;color:#fff;background:rgba(0,0,0,.6);padding:3px 8px;">यहाँ captions हिंदी में</div>
+    <div id="late-spawn-zone"></div>
   </div>
 
   <div class="player-toggle-bar" style="padding:8px;">⭐ Bookmark | 🔖 Save | ⚙ Quality toggles</div>
@@ -19,5 +24,13 @@
     /* simulate the PW player re-applying ITS stored speed (the 1.5x bug) */
     window.siteSet = (r) => { document.getElementById('lec').playbackRate = r; };
     window.mapKeys = { up: 'ArrowUp', down: 'ArrowDown' };
+    /* v1.5: player spawns a hover menu AFTER clean view is already ON */
+    window.spawnOverlay = () => {
+      const d = document.createElement('div');
+      d.id = 'late-overlay';
+      d.style.cssText = 'position:absolute;top:70px;right:14px;background:#222;color:#fff;padding:6px;';
+      d.textContent = 'LATE hover menu';
+      document.getElementById('late-spawn-zone').appendChild(d);
+    };
   </script>
 </body></html>

@@ -65,6 +65,18 @@ E2E: real HeadlessChrome/131.0.6778.0 (injection shim: extension engine N/A in s
   ✅ manual 1.25x kept
   ✅ then ArrowDown -> 1x
 
+━━━ E18. v1.5: obfuscated overlay hidden, captions + video survive ━━━
+  ✅ random-class overlay hidden WITHOUT knowing its class name
+  ✅ overlay tagged by geometry engine
+  ✅ captions stay visible
+  ✅ video wrapper stays visible
+  ✅ video fully visible
+
+━━━ E19. v1.5: hover menu spawning AFTER clean ON vanishes too ━━━
+  ✅ late overlay auto-hidden by watcher
+  ✅ everything restored on OFF
+  ✅ all attributes cleaned on OFF
+
 ━━━ E16. fullscreen toast re-parents (if fullscreen available) ━━━
   ✅ toast moved INSIDE fullscreen element
 
@@ -72,5 +84,5 @@ E2E: real HeadlessChrome/131.0.6778.0 (injection shim: extension engine N/A in s
   ✅ ended/near-ended video gets 2x for next play
 
 ════════════════════════════════════
-  E2E RESULT: 36 passed, 0 failed
+  E2E RESULT: 44 passed, 0 failed
 ════════════════════════════════════

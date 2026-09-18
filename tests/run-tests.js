@@ -96,6 +96,12 @@ function createPage({ url = 'https://www.youtube.com/watch?v=test', prefillClean
   page.loaded = (video) => video.dispatchEvent(new win.Event('loadedmetadata'));
   page.toastText = () => { const t = doc.querySelector('#psc-toast'); return t && t.isConnected ? t.textContent : null; };
   page.isClean = () => doc.documentElement.classList.contains('psc-clean');
+  /* jsdom has no layout — mock element rects for the geometry engine */
+  page.rect = (el, l, t, w, h) => {
+    el.getBoundingClientRect = () => ({ left: l, top: t, width: w, height: h,
+      right: l + w, bottom: t + h, x: l, y: t, toJSON() { return {}; } });
+    return el;
+  };
 
   win.eval(SRC);   // inject the real extension content script
   return page;
@@ -785,6 +791,103 @@ group('45. Stale lock released after player removed + lock expired');
   p.siteSetsSpeed(v1, 0.25);               // dead video's ghost must never act
   eq(v1.playbackRate, 0.25, 'no ghost-enforcement from the dead video');
   eq(v2.playbackRate, 1.5, '...and it never touches the live video either');
+}
+
+/* ================= v1.5: UNIVERSAL CLEAN VIEW (geometry engine) =================
+ * Root cause of "T kuch nahi karta" on real PW: class-list CSS selectors
+ * never matched obfuscated/shadow-DOM players. v1.5 hides ANYTHING that
+ * overlaps the video rect — no class names needed. */
+
+/* ---------- 46. class-agnostic overlay hiding ---------- */
+group('46. v1.5: overlays hidden with NO class-name dependency');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.rect(v, 100, 100, 640, 360);                       // video at (100,100) 640x360
+
+  const overlay = p.doc.createElement('div');          // random obfuscated name like PW's
+  overlay.className = 'xq7-z9k';
+  p.rect(overlay, 600, 120, 150, 60);                  // floats over video corner
+  const wrapper = p.doc.createElement('div');
+  p.rect(wrapper, 90, 90, 660, 380);
+  wrapper.appendChild(v);                              // wrapper is ANCESTOR of video
+
+  p.doc.body.appendChild(wrapper);
+  p.doc.body.appendChild(overlay);
+
+  p.press('t');
+  eq(overlay.getAttribute('data-psc-hide'), '1', 'random-class overlay tagged & hidden');
+  eq(wrapper.hasAttribute('data-psc-hide'), false, 'video-wrapping ancestor NEVER tagged');
+  eq(v.hasAttribute('data-psc-hide'), false, 'video itself NEVER tagged');
+  eq(p.doc.querySelectorAll('style[data-psc-hide]').length > 0, true, 'hide <style> injected');
+
+  p.press('t');
+  eq(overlay.hasAttribute('data-psc-hide'), false, 'second t -> attributes removed, overlay back');
+  eq(p.doc.querySelectorAll('style[data-psc-hide]').length, 0, 'style tags cleaned up');
+}
+
+/* ---------- 47. captions survive ---------- */
+group('47. v1.5: captions/subtitles stay visible');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.rect(v, 0, 0, 640, 360);
+  const cap = p.doc.createElement('div');
+  cap.className = 'caption-line';
+  p.rect(cap, 200, 300, 300, 40);
+  p.doc.body.appendChild(v); p.doc.body.appendChild(cap);
+  p.press('t');
+  eq(cap.hasAttribute('data-psc-hide'), false, 'caption overlay NOT hidden');
+}
+
+/* ---------- 48. toast never hidden ---------- */
+group('48. v1.5: our toast never hidden');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.rect(v, 0, 0, 640, 360);
+  p.press('ArrowUp');                                  // creates toast (bottom-right, overlaps video region if big rect)
+  const t = p.doc.querySelector('#psc-toast');
+  p.rect(t, 500, 300, 120, 40);                        // force overlap with video
+  p.press('t');
+  eq(t.hasAttribute('data-psc-hide'), false, 'toast NOT hidden in clean view');
+}
+
+/* ---------- 49. shadow-DOM player: overlays inside shadow root ---------- */
+group('49. v1.5: works INSIDE shadow roots (PW Ionic style)');
+{
+  const p = createPage();
+  const host = p.doc.createElement('div');
+  const sr = host.attachShadow({ mode: 'open' });
+  const v = p.doc.createElement('video');
+  Object.defineProperty(v, 'readyState', { value: 2, configurable: true });
+  const shadowOverlay = sr.ownerDocument.createElement('div');
+  shadowOverlay.className = 'ionic-obf-2';
+  p.rect(v, 0, 0, 640, 360);
+  p.rect(shadowOverlay, 500, 20, 120, 50);
+  sr.appendChild(v); sr.appendChild(shadowOverlay);
+  p.doc.body.appendChild(host);
+
+  p.press('t');
+  eq(shadowOverlay.getAttribute('data-psc-hide'), '1', 'shadow-root overlay tagged');
+  ok(sr.querySelector('style[data-psc-hide]') !== null, 'hide <style> injected INTO the shadow root');
+  eq(host.hasAttribute('data-psc-hide'), false, 'shadow host (ancestor) not tagged');
+}
+
+/* ---------- 50. late-added overlay caught by re-scan ---------- */
+group('50. v1.5: late overlays (hover menus) also vanish');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.rect(v, 0, 0, 640, 360);
+  p.press('t');                                        // clean ON
+  const late = p.doc.createElement('div');             // menu pops in AFTER
+  p.rect(late, 550, 50, 80, 80);
+  p.doc.body.appendChild(late);
+  p.win.__pscPass();                                   // watcher scan (throttled in real life)
+  eq(late.getAttribute('data-psc-hide'), '1', 'late overlay caught by re-scan');
+  p.press('t');                                        // off
+  eq(late.hasAttribute('data-psc-hide'), false, 'all restored on off');
 }
 
 /* ================= summary ================= */
