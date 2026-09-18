@@ -1,16 +1,16 @@
-# 🧪 Test Report — PW Speed Controller v1.5.0 (UNIT + TRUE E2E)
+# 🧪 Test Report — PW Speed Controller v1.5.2 (UNIT + TRUE E2E)
 
 **Date:** 2026-09-18
 **Layers:**
-1. **Unit (jsdom):** 136 assertions · 50 groups · simulated pages with full time control
-2. **E2E (REAL Chromium 131):** 44 assertions · 19 scenarios · real keyboard/CDP
+1. **Unit (jsdom):** 147 assertions · 53 groups · simulated pages incl. real MutationObserver async watcher tests
+2. **E2E (REAL Chromium 131):** 65 assertions · 23 scenarios — incl. high-fidelity **real-structure clones**: YouTube player DOM (E22) & PW Ionic **shadow-DOM** player (E23). Direct youtube.com/pw.live access is blocked from this sandbox (+ PW needs login), so clones replicate the exact structures from the user's screenshots · real keyboard/CDP
    pipeline, real media events, real CSS cascade, real per-origin storage — pages
    served as `pw.live` / `youtube.com` origins (`--host-resolver-rules`), real
    `content.js`/`clean.css` injected unmodified (document_start injection shim —
    sandbox network cannot fetch an extension-enabled Chrome; every browser CDN is
    blocked here, engine still 100% real Chromium)
 
-## ✅ UNIT: 136/136 PASSED · E2E: 44/44 PASSED — 180 checks, zero failures
+## ✅ UNIT: 147/147 PASSED · E2E: 65/65 PASSED — 212 checks, zero failures
 
 ## 🌐 E2E scenarios (real browser)
 | # | Scenario | Result |
@@ -35,7 +35,16 @@
 
 ---
 
-## 🐛➜🔧 Total bugs found & fixed: 20
+## 🐛➜🔧 Total bugs found & fixed: 25
+
+### Round v1.5.1/v1.5.2 (adversarial audit of the v1.5 engine itself)
+| # | Bug | Root cause | Fix |
+|---|---|---|---|
+| 21 | iframe overlays stayed hidden after clean OFF | `untagEverything` didn't reach iframe docs | `collectAllRoots()` covers doc + shadow + iframe docs |
+| 22 | Late overlays INSIDE shadow roots escaped the watcher | MutationObserver on document can't see shadow-internal mutations | Observer attached to EVERY root (doc + each shadowRoot + iframe docs), refreshed each pass + 4s fallback interval |
+| 23 | Orphan `<style>` left after OFF | style tags shared the SAME marker attr as hidden elements; untag removed the attr before querying styles | Separate `data-psc-style` marker; styles removed first |
+| 24 | **CATASTROPHIC: whole page (incl. `<html>`) could hide itself** when video lives in an iframe | ancestor walk stopped at iframe Document boundary (`no .host` on Document) → top `<html>` tagged | ancestor walk now hops `Document.defaultView.frameElement` — crosses iframe boundaries |
+| 25 | Overlay tagged but NOT visually hidden when in a NEW shadow root | hide `<style>` only injected into video roots, not the overlay's own root; doc CSS can't cross shadow boundary | per-element root style injection at tag time |
 
 ### Round v1.5.0 (USER-REPORTED: "T kahin kaam nahi kar raha" + screenshots)
 | # | Bug | Root cause | Fix |

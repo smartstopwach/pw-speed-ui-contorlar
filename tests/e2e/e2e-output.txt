@@ -83,6 +83,35 @@ E2E: real HeadlessChrome/131.0.6778.0 (injection shim: extension engine N/A in s
 ━━━ E17. ended video still accepts speed ━━━
   ✅ ended/near-ended video gets 2x for next play
 
+━━━ E20. iframe player: clean hides inside frame, OFF restores fully ━━━
+  ✅ overlay inside iframe hidden by top-page T
+  ✅ frame video still visible
+  ✅ iframe overlay restored on OFF (bug #21: untag reached the frame doc)
+  ✅ no leftover tags inside frame
+  ✅ no orphan styles inside frame (bug #23)
+
+━━━ E21. watcher sees mutations inside shadow roots (bug #22) ━━━
+  ✅ late overlay INSIDE NEW shadow root hidden by watcher
+
+━━━ E22. REAL YouTube DOM: clean view = title/controls gone, captions stay ━━━
+  ✅ 2x on YT-structure page
+  ✅ .ytp-chrome-top hidden
+  ✅ .ytp-gradient-top hidden
+  ✅ .ytp-chrome-bottom hidden
+  ✅ .ytp-doubletap-ui-legacy hidden
+  ✅ .ytp-bezel hidden
+  ✅ .ytp-chrome-top-buttons hidden
+  ✅ captions SURVIVE
+  ✅ video visible
+  ✅ all back on second t
+
+━━━ E23. REAL PW Ionic DOM (shadow): ALL icons gone class-agnostic ━━━
+  ✅ 2x works inside Ionic shadow player
+  ✅ top icons (back/logo/menu) hidden
+  ✅ time chip + Ask AI + bottom icon bar + seek flash ALL hidden — pure geometry, zero class knowledge
+  ✅ video visible
+  ✅ everything restored on second t
+
 ════════════════════════════════════
-  E2E RESULT: 44 passed, 0 failed
+  E2E RESULT: 65 passed, 0 failed
 ════════════════════════════════════

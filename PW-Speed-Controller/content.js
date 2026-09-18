@@ -1,5 +1,5 @@
 /* ============================================================
- * PW Speed Controller + Clean View  —  content script (v1.5.0)
+ * PW Speed Controller + Clean View  —  content script (v1.5.2)
  * ------------------------------------------------------------
  *  UP ARROW    -> lecture/video continues at 2x
  *  DOWN ARROW  -> lecture/video continues at 1x
@@ -30,6 +30,7 @@
 
   const CLEAN_CLASS = 'psc-clean';
   const HIDE_ATTR   = 'data-psc-hide';
+  const STYLE_ATTR  = 'data-psc-style';   // marker for injected <style> tags (kept separate from HIDE_ATTR)
   const STORE_KEY   = 'psc_clean_' + location.host;
   const EPS         = 0.001;
   const SKIP_TAGS   = new Set(['SCRIPT','STYLE','BR','LINK','META','TITLE','NOSCRIPT','IFRAME']);
@@ -44,9 +45,10 @@
   const enforcedVideos = new WeakSet();
 
   /* clean-view state */
-  let cleanOn      = false;
-  let cleanObserver = null;
+  let cleanOn       = false;
+  let cleanObservers = [];
   let cleanPassTimer = null;
+  let cleanFallbackTimer = null;
   let styleRoots   = new WeakSet();   // roots that already have the hide <style>
 
   /* ---- deep element collection across shadow roots ---- */
@@ -185,12 +187,19 @@
    *   - NEVER hides the video, its ancestors, captions, or our toast
    * ================================================================ */
 
-  /* ancestors in the COMPOSED tree (crosses shadow boundaries) */
+  /* ancestors in the COMPOSED tree — crosses BOTH shadow boundaries
+   * (via root.host) AND same-origin iframe boundaries (a Document's
+   * frameElement). Without the iframe hop, the TOP <html> looks like
+   * "not an ancestor" of an iframe video and gets hidden itself! */
   function isComposedAncestor(el, node) {
     let n = node;
     let hops = 0;
-    while (n && hops++ < 100) {
+    while (n && hops++ < 150) {
       if (n === el) return true;
+      if (n.nodeType === 9) {                              // Document -> hop to its frame element
+        n = (n.defaultView && n.defaultView.frameElement) || null;
+        continue;
+      }
       const root = n.getRootNode ? n.getRootNode() : null;
       n = n.parentNode || (root && root.host) || null;
     }
@@ -226,7 +235,7 @@
     if (styleRoots.has(root)) return;
     try {
       const s = (root.ownerDocument || document).createElement('style');
-      s.setAttribute(HIDE_ATTR, '');
+      s.setAttribute(STYLE_ATTR, '');
       s.textContent = '[' + HIDE_ATTR + ']{display:none!important;visibility:hidden!important;}';
       (root.head || root.documentElement || root).appendChild(s);
       styleRoots.add(root);
@@ -266,7 +275,13 @@
           if (KEEP_CAPTIONS && KEEP_RE.test(String(el.className || '') + ' ' + (el.id || ''))) return;
           const er = el.getBoundingClientRect();
           if (!er || (er.width < 2 && er.height < 2)) return; // already invisible
-          if (rectsOverlap(er, vr)) el.setAttribute(HIDE_ATTR, '1');
+          if (rectsOverlap(er, vr)) {
+            el.setAttribute(HIDE_ATTR, '1');
+            /* the hide <style> must live in THIS element's own root —
+             * a document-level rule can't reach inside a shadow root */
+            const elRoot = (el.getRootNode && el.getRootNode()) || document;
+            ensureCleanStyle(elRoot);
+          }
         });
       });
     });
@@ -274,28 +289,32 @@
   /* test/debug hook */
   try { Object.defineProperty(window, '__pscPass', { value: cleanPass, configurable: true }); } catch (e) {}
 
-  function untagEverything() {
-    [document, ...collectShadowRoots(document)].forEach(rt => {
-      try {
-        rt.querySelectorAll('[' + HIDE_ATTR + ']').forEach(el => {
-          el.removeAttribute(HIDE_ATTR);
-        });
-        rt.querySelectorAll('style[' + HIDE_ATTR + ']').forEach(s => s.remove());
-      } catch (e) {}
-    });
-    styleRoots = new WeakSet();
-  }
-
-  function collectShadowRoots(root) {
-    const roots = [];
+  /* all documents we may have touched: top doc, shadow roots, same-origin iframes */
+  function collectAllRoots() {
+    const roots = [document];
     (function walk(r) {
       try {
         r.querySelectorAll('*').forEach(el => {
           if (el.shadowRoot) { roots.push(el.shadowRoot); walk(el.shadowRoot); }
         });
+        r.querySelectorAll('iframe').forEach(f => {
+          try { if (f.contentDocument) { roots.push(f.contentDocument); walk(f.contentDocument); } } catch (e) {}
+        });
       } catch (e) {}
-    })(root);
+    })(document);
     return roots;
+  }
+
+  function untagEverything() {
+    collectAllRoots().forEach(rt => {
+      try {
+        rt.querySelectorAll('style[' + STYLE_ATTR + ']').forEach(s => s.remove());
+        rt.querySelectorAll('[' + HIDE_ATTR + ']').forEach(el => {
+          el.removeAttribute(HIDE_ATTR);
+        });
+      } catch (e) {}
+    });
+    styleRoots = new WeakSet();
   }
 
   function schedulePass() {
@@ -303,19 +322,34 @@
     cleanPassTimer = setTimeout(() => {
       cleanPassTimer = null;
       cleanPass();
+      startCleanWatcher();   // pick up any NEW shadow roots / iframes
     }, CLEAN_SCAN_MS);
   }
 
+  /* observe EVERY root we care about: document, each shadow root, and
+   * same-origin iframe docs — MutationObserver on document alone is blind
+   * to mutations happening inside a shadow root! */
   function startCleanWatcher() {
-    if (cleanObserver) return;
-    const target = document.body || document.documentElement;
-    if (!target) { schedulePass(); return; }
-    cleanObserver = new MutationObserver(schedulePass);
-    cleanObserver.observe(target, { childList: true, subtree: true });
+    cleanObservers.forEach(o => o.disconnect());
+    cleanObservers = [];
+    collectAllRoots().forEach(rt => {
+      const target = rt.body || rt.documentElement || rt;
+      if (!target) return;
+      try {
+        const mo = new MutationObserver(schedulePass);
+        mo.observe(target, { childList: true, subtree: true });
+        cleanObservers.push(mo);
+      } catch (e) {}
+    });
+    if (!cleanFallbackTimer) {
+      cleanFallbackTimer = setInterval(() => { if (cleanOn) schedulePass(); }, 4000);
+    }
   }
 
   function stopCleanWatcher() {
-    if (cleanObserver) { cleanObserver.disconnect(); cleanObserver = null; }
+    cleanObservers.forEach(o => o.disconnect());
+    cleanObservers = [];
+    if (cleanFallbackTimer) { clearInterval(cleanFallbackTimer); cleanFallbackTimer = null; }
     if (cleanPassTimer) { clearTimeout(cleanPassTimer); cleanPassTimer = null; }
   }
 

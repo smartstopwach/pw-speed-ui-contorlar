@@ -235,7 +235,24 @@
   ✅ late overlay caught by re-scan
   ✅ all restored on off
 
+━━━ 53. v1.5.1: marker separation — no orphan styles ever ━━━
+  ✅ zero orphan styles after OFF
+  ✅ no style carries the hide attr anymore
+  ✅ zero leftover hide attrs
+
+━━━ 51. v1.5.1: watcher spots mutations INSIDE shadow roots ━━━
+  ✅ shadow-internal mutation detected by watcher
+  ✅ hide <style> also injected into the NEW shadow root (bug #25)
+
+━━━ 52. v1.5.1: iframe overlays hidden AND restored completely ━━━
+  ✅ iframe overlay tagged
+  ✅ style injected inside iframe doc
+  ✅ top <html> NEVER tagged when video lives in iframe
+  ✅ top <body> never tagged either
+  ✅ iframe overlay restored
+  ✅ no orphan style left in iframe doc
+
 ════════════════════════════════════
-  RESULT: 136 passed, 0 failed
+  RESULT: 147 passed, 0 failed
   ALL FEATURES WORKING ✅
 ════════════════════════════════════

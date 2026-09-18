@@ -409,6 +409,123 @@ const displayOf = (p, sel) => p.$eval(sel, el => getComputedStyle(el).display);
     await p.close();
   }
 
+  /* ============ E20. v1.5.1: iframe player clean + FULL restore ============ */
+  group('E20. iframe player: clean hides inside frame, OFF restores fully');
+  {
+    const p = await newPageAt('e20.pw.live', 'with-iframe.html');
+    await sleep(400);
+    const frame = p.frames().find(f => f.url().includes('frame-player.html'));
+    await frame.evaluate(() => {
+      const d = document.createElement('div');
+      d.id = 'frame-overlay';
+      d.style.cssText = 'position:fixed;top:8px;right:8px;background:#333;color:#fff;padding:4px;';
+      d.textContent = 'frame junk';
+      document.body.appendChild(d);
+      /* position the overlay over the video */
+      const vr = document.querySelector('#fv').getBoundingClientRect();
+      d.style.top = (vr.top + 6) + 'px';
+      d.style.left = (vr.right - 140) + 'px';
+    });
+    await sleep(200);
+    await p.keyboard.press('t');                       // clean ON from TOP page
+    await sleep(700);
+    eq(await frame.evaluate(() => {
+      const el = document.getElementById('frame-overlay');
+      return getComputedStyle(el).display;
+    }), 'none', 'overlay inside iframe hidden by top-page T');
+    eq(await frame.$eval('#fv', v => !!(v.offsetWidth || v.offsetHeight)), true, 'frame video still visible');
+    await p.keyboard.press('t');                       // OFF
+    await sleep(500);
+    ok((await frame.evaluate(() => getComputedStyle(document.getElementById('frame-overlay')).display)) !== 'none',
+       'iframe overlay restored on OFF (bug #21: untag reached the frame doc)');
+    eq(await frame.evaluate(() => document.querySelectorAll('[data-psc-hide]').length), 0,
+       'no leftover tags inside frame');
+    eq(await frame.evaluate(() => document.querySelectorAll('style[data-psc-style]').length), 0,
+       'no orphan styles inside frame (bug #23)');
+    await p.close();
+  }
+
+  /* ============ E21. v1.5.1: late overlay INSIDE shadow root ============ */
+  group('E21. watcher sees mutations inside shadow roots (bug #22)');
+  {
+    const p = await newPageAt('e21.pw.live', 'pw-player.html');
+    await p.keyboard.press('t');                       // clean ON first
+    await sleep(600);
+    await p.evaluate(() => {                           // THEN spawn shadow + overlay (PW Ionic style)
+      const host = document.createElement('div');
+      host.id = 'late-host';
+      const sr = host.attachShadow({ mode: 'open' });
+      const d = document.createElement('div');
+      d.id = 'shadow-late';
+      d.textContent = 'late shadow menu';
+      /* place it ON the video rect (not viewport corner — engine is geometry-based) */
+      const vr = document.querySelector('#lec').getBoundingClientRect();
+      d.style.cssText = 'position:fixed;background:#222;color:#fff;padding:8px;z-index:99;'
+        + 'top:' + (vr.top + 20) + 'px;left:' + (vr.right - 150) + 'px;';
+      document.querySelector('.video-toggle-wrapper').appendChild(host);
+      sr.appendChild(d);
+    });
+    await sleep(900);                                  // 350ms throttle + margin
+    eq(await p.evaluate(() => {
+      const sr = document.getElementById('late-host').shadowRoot;
+      return getComputedStyle(sr.getElementById('shadow-late')).display;
+    }), 'none', 'late overlay INSIDE NEW shadow root hidden by watcher');
+    await p.close();
+  }
+
+  /* ============ E22. REAL YouTube structure clone ============ */
+  group('E22. REAL YouTube DOM: clean view = title/controls gone, captions stay');
+  {
+    const p = await newPageAt('www.youtube.com', 'yt-clone.html');
+    /* sanity: arrows + lock work inside the real YT structure */
+    await p.keyboard.press('ArrowUp');
+    eq(await waitRate(p, 'video', 2), 2, '2x on YT-structure page');
+    await p.keyboard.press('t');
+    await sleep(700);
+    for (const sel of ['.ytp-chrome-top', '.ytp-gradient-top', '.ytp-chrome-bottom', '.ytp-doubletap-ui-legacy', '.ytp-bezel', '.ytp-chrome-top-buttons']) {
+      eq(await displayOf(p, sel), 'none', sel + ' hidden');
+    }
+    ok((await displayOf(p, '.caption-window')) !== 'none', 'captions SURVIVE');
+    eq(await p.$eval('video', v => !!(v.offsetWidth || v.offsetHeight)), true, 'video visible');
+    await p.keyboard.press('t');                       // OFF
+    await sleep(500);
+    eq(await displayOf(p, '.ytp-chrome-top'), 'block', 'all back on second t');
+    await p.close();
+  }
+
+  /* ============ E23. REAL PW Ionic structure clone (user's screenshot #2) ============ */
+  group('E23. REAL PW Ionic DOM (shadow): ALL icons gone class-agnostic');
+  {
+    const p = await newPageAt('e23.pw.live', 'pw-clone.html');
+    await sleep(400);
+    await p.keyboard.press('ArrowUp');
+    const speed = await p.evaluate(() =>
+      document.querySelector('ion-app').shadowRoot.querySelector('#plc').playbackRate);
+    eq(speed, 2, '2x works inside Ionic shadow player');
+    await p.keyboard.press('t');
+    await sleep(700);
+    const hidden = await p.evaluate(() => {
+      const sr = document.querySelector('ion-app').shadowRoot;
+      const gone = sel => getComputedStyle(sr.querySelector(sel)).display === 'none';
+      return {
+        back: gone('ion-back'), logo: gone('.logo'), menu: gone('ion-menu'),
+        timechip: gone('.timechip'), askai: gone('.ask-ai'),
+        bottombar: gone('.bottom-bar'), seekflash: gone('.seek-flash'),
+        video: getComputedStyle(sr.querySelector('#plc')).display !== 'none'
+      };
+    });
+    ok(hidden.back && hidden.logo && hidden.menu, 'top icons (back/logo/menu) hidden');
+    ok(hidden.timechip && hidden.askai && hidden.bottombar && hidden.seekflash,
+       'time chip + Ask AI + bottom icon bar + seek flash ALL hidden — pure geometry, zero class knowledge');
+    ok(hidden.video, 'video visible');
+    await p.keyboard.press('t');
+    await sleep(500);
+    const restored = await p.evaluate(() =>
+      getComputedStyle(document.querySelector('ion-app').shadowRoot.querySelector('.bottom-bar')).display);
+    ok(restored !== 'none', 'everything restored on second t');
+    await p.close();
+  }
+
   /* ================= summary ================= */
   console.log('\n════════════════════════════════════');
   console.log(`  E2E RESULT: ${passed} passed, ${failed} failed`);

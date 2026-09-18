@@ -819,11 +819,11 @@ group('46. v1.5: overlays hidden with NO class-name dependency');
   eq(overlay.getAttribute('data-psc-hide'), '1', 'random-class overlay tagged & hidden');
   eq(wrapper.hasAttribute('data-psc-hide'), false, 'video-wrapping ancestor NEVER tagged');
   eq(v.hasAttribute('data-psc-hide'), false, 'video itself NEVER tagged');
-  eq(p.doc.querySelectorAll('style[data-psc-hide]').length > 0, true, 'hide <style> injected');
+  eq(p.doc.querySelectorAll('style[data-psc-style]').length > 0, true, 'hide <style> injected');
 
   p.press('t');
   eq(overlay.hasAttribute('data-psc-hide'), false, 'second t -> attributes removed, overlay back');
-  eq(p.doc.querySelectorAll('style[data-psc-hide]').length, 0, 'style tags cleaned up');
+  eq(p.doc.querySelectorAll('style[data-psc-style]').length, 0, 'style tags cleaned up');
 }
 
 /* ---------- 47. captions survive ---------- */
@@ -870,7 +870,7 @@ group('49. v1.5: works INSIDE shadow roots (PW Ionic style)');
 
   p.press('t');
   eq(shadowOverlay.getAttribute('data-psc-hide'), '1', 'shadow-root overlay tagged');
-  ok(sr.querySelector('style[data-psc-hide]') !== null, 'hide <style> injected INTO the shadow root');
+  ok(sr.querySelector('style[data-psc-style]') !== null, 'hide <style> injected INTO the shadow root');
   eq(host.hasAttribute('data-psc-hide'), false, 'shadow host (ancestor) not tagged');
 }
 
@@ -890,9 +890,80 @@ group('50. v1.5: late overlays (hover menus) also vanish');
   eq(late.hasAttribute('data-psc-hide'), false, 'all restored on off');
 }
 
+/* ---------- 46 fix-check: style marker attr is separate ---------- */
+group('53. v1.5.1: marker separation — no orphan styles ever');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.rect(v, 0, 0, 640, 360);
+  const ov = p.doc.createElement('div'); p.rect(ov, 10, 10, 100, 50);
+  p.doc.body.appendChild(v); p.doc.body.appendChild(ov);
+  p.press('t');                                        // ON
+  p.press('t');                                        // OFF
+  eq(p.doc.querySelectorAll('style[data-psc-style]').length, 0, 'zero orphan styles after OFF');
+  eq(p.doc.querySelectorAll('style[data-psc-hide]').length, 0, 'no style carries the hide attr anymore');
+  eq(p.doc.querySelectorAll('[data-psc-hide]').length, 0, 'zero leftover hide attrs');
+}
+
+/* ================= ASYNC watcher tests (v1.5.1) ================= */
+const wait = ms => new Promise(r => setTimeout(r, ms));
+
+async function asyncGroups() {
+  group('51. v1.5.1: watcher spots mutations INSIDE shadow roots');
+  {
+    const p = createPage();
+    const v = p.addVideo({ playing: true });
+    p.rect(v, 0, 0, 640, 360);
+    p.press('t');                                      // clean ON (observer armed)
+    await wait(50);
+    const host = p.doc.createElement('div');
+    const sr = host.attachShadow({ mode: 'open' });
+    p.doc.body.appendChild(host);
+    await wait(500);                                   // pass refresh observes NEW shadow root
+    const late = p.doc.createElement('div');
+    late.className = 'zzz';
+    late.getBoundingClientRect = () => ({ left: 500, top: 10, width: 100, height: 50, right: 600, bottom: 60, x: 500, y: 10, toJSON(){ return {}; } });
+    sr.appendChild(late);                              // mutation INSIDE shadow root
+    await wait(600);
+    eq(late.getAttribute('data-psc-hide'), '1', 'shadow-internal mutation detected by watcher');
+    ok(sr.querySelector('style[data-psc-style]') !== null,
+       'hide <style> also injected into the NEW shadow root (bug #25)');
+  }
+
+  group('52. v1.5.1: iframe overlays hidden AND restored completely');
+  {
+    const p = createPage();
+    const iframe = p.doc.createElement('iframe');
+    p.doc.body.appendChild(iframe);
+    const v = iframe.contentDocument.createElement('video');
+    Object.defineProperty(v, 'readyState', { value: 2, configurable: true });
+    iframe.contentDocument.body.appendChild(v);
+    p.rect(v, 0, 0, 640, 360);
+    const ov = iframe.contentDocument.createElement('div');
+    ov.getBoundingClientRect = () => ({ left: 100, top: 20, width: 120, height: 60, right: 220, bottom: 80, x: 100, y: 20, toJSON(){ return {}; } });
+    iframe.contentDocument.body.appendChild(ov);
+
+    p.press('t');                                      // ON from top page
+    eq(ov.getAttribute('data-psc-hide'), '1', 'iframe overlay tagged');
+    ok(iframe.contentDocument.querySelector('style[data-psc-style]') !== null, 'style injected inside iframe doc');
+    /* BUG #24: ancestor walk must cross the iframe boundary — never tag top <html> */
+    eq(p.doc.documentElement.hasAttribute('data-psc-hide'), false,
+       'top <html> NEVER tagged when video lives in iframe');
+    eq(p.doc.body.hasAttribute('data-psc-hide'), false, 'top <body> never tagged either');
+    p.press('t');                                      // OFF
+    eq(ov.hasAttribute('data-psc-hide'), false, 'iframe overlay restored');
+    eq(iframe.contentDocument.querySelectorAll('style[data-psc-style]').length, 0, 'no orphan style left in iframe doc');
+  }
+}
+
 /* ================= summary ================= */
-console.log('\n════════════════════════════════════');
-console.log(`  RESULT: ${passed} passed, ${failed} failed`);
-if (failed) { console.log('  FAILURES:\n   - ' + failures.join('\n   - ')); process.exit(1); }
-console.log('  ALL FEATURES WORKING ✅');
-console.log('════════════════════════════════════');
+async function main() {
+  await asyncGroups();
+  console.log('\n════════════════════════════════════');
+  console.log(`  RESULT: ${passed} passed, ${failed} failed`);
+  if (failed) console.log('  FAILURES:\n   - ' + failures.join('\n   - '));
+  else console.log('  ALL FEATURES WORKING ✅');
+  console.log('════════════════════════════════════');
+  process.exit(failed ? 1 : 0);   // pages hold live intervals (clean-watcher) — exit explicitly
+}
+main();
