@@ -1,17 +1,24 @@
-# 🧪 Test Report — PW Speed Controller v1.4 (HARDCORE EDITION)
+# 🧪 Test Report — PW Speed Controller v1.4.1 (HARDCORE EDITION)
 
 **Date:** 2026-09-18
 **Method:** Automated jsdom adversarial simulation — the REAL `content.js` runs
 against mock YouTube / pw.live pages with real KeyboardEvents, ratechange/loadedmetadata
-events, shadow DOM, same-origin iframes, fullscreen state, storage, and full
-time control (clock jumps, auto-repeat, lock expiry).
-**108 assertions · 39 groups · 0 failures**
+events, shadow DOM, same-origin iframes, fullscreen state, duplicate injection,
+storage, and full time control (clock jumps, auto-repeat, ms-precision boundaries).
+**123 assertions · 45 groups · 0 failures**
 
-## ✅ Result: 108/108 PASSED — ALL FEATURES + ALL ATTACKS SURVIVED
+## ✅ Result: 123/123 PASSED — ALL FEATURES + ALL ATTACKS SURVIVED (3 rounds)
 
 ---
 
-## 🐛➜🔧 Total bugs found & fixed across rounds: 14
+## 🐛➜🔧 Total bugs found & fixed across rounds: 17
+
+### Round v1.4.1 (precision & injection attacks)
+| # | Attack | Fix |
+|---|---|---|
+| 15 | Script injected TWICE -> every key toggles twice & cancels out | `__PSC_ACTIVE__` guard: second copy dies instantly |
+| 16 | `lockedVideo` kept detached players alive in memory forever (SPA leak) | Stale ref released once lock is cold + player gone |
+| 17 | Nothing playing -> arrows hit the FIRST video (could be a tiny ad) | Largest-area video preferred (the lecture) |
 
 ### Round v1.3 (deep review)
 | # | Bug | Fix |
@@ -62,6 +69,12 @@ time control (clock jumps, auto-repeat, lock expiry).
 | 37 | ATTACK: garbage events never crash | ✅ |
 | 38 | ATTACK: holding T no flicker | ✅ |
 | 39 | ATTACK: bg autoplay can't steal arrows mid-lock | ✅ |
+| 40 | ATTACK: double injection -> second copy inert | ✅ |
+| 41 | PRECISION: combo boundary 200ms fires / 201ms doesn't | ✅ |
+| 42 | PRECISION: lock boundary 2999ms snaps / 3001ms adopts | ✅ |
+| 43 | ATTACK: 0ms truly-simultaneous combo | ✅ |
+| 44 | ATTACK: largest video beats tiny ad player | ✅ |
+| 45 | Stale lock released; no ghost-enforcement from dead video | ✅ |
 
 ## 📦 Zip integrity
 - Exactly **one top-level folder** (`PW-Speed-Controller`) ✅ · CRC OK ✅

@@ -687,6 +687,106 @@ group('39. ATTACK: background autoplay video cannot steal arrows mid-lock');
   eq(v2.playbackRate, 2, 'after lock: arrows follow current playing video again');
 }
 
+/* ================= ROUND 3: PRECISION & INJECTION ATTACKS ================= */
+
+/* ---------- 40. ATTACK: double injection of the extension ---------- */
+group('40. ATTACK: script injected twice -> second copy is inert');
+{
+  const p = createPage();                 // first injection already inside
+  p.win.eval(SRC);                        // ATTACK: inject again
+  p.win.eval(SRC);                        // ...and again for good measure
+  const v = p.addVideo({ playing: true });
+
+  p.press('t');
+  eq(p.isClean(), true, 'single T press = exactly ONE toggle (no cancel-out)');
+  p.press('t');
+  eq(p.isClean(), false, 'second T = back to normal');
+
+  p.press('ArrowUp');
+  eq(v.playbackRate, 2, 'arrows still work after duplicate injection');
+  eq(p.doc.querySelectorAll('#psc-toast').length, 1, 'still exactly ONE toast element');
+}
+
+/* ---------- 41. PRECISION: combo window boundary 200ms / 201ms ---------- */
+group('41. PRECISION: combo boundary at exactly 200/201ms');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  p.advance(200);                          // EXACTLY at the window edge
+  p.press('ArrowDown');
+  eq(v.playbackRate, 1.5, 'gap == 200ms -> combo fires');
+
+  p.advance(1000);
+  p.press('ArrowUp');
+  p.advance(201);                          // ONE ms past the window
+  p.press('ArrowDown');
+  eq(v.playbackRate, 1, 'gap == 201ms -> plain 1x, no combo');
+}
+
+/* ---------- 42. PRECISION: lock boundary at 2999ms / 3000ms ---------- */
+group('42. PRECISION: lock expiry boundary');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');                      // lock = now + 3000ms
+  p.advance(2999);                         // last millisecond of the lock
+  p.siteSetsSpeed(v, 1.5);
+  eq(v.playbackRate, 2, 'override at 2999ms -> still snapped back');
+  p.advance(2);                            // now exactly past expiry
+  p.siteSetsSpeed(v, 1.5);
+  eq(v.playbackRate, 1.5, 'override at 3001ms -> adopted as manual');
+}
+
+/* ---------- 43. ATTACK: truly simultaneous arrows (0ms gap) ---------- */
+group('43. ATTACK: 0ms simultaneous ↑+↓ combo');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  p.press('ArrowDown');                    // same millisecond
+  eq(v.playbackRate, 1.5, '0ms gap -> combo still fires');
+}
+
+/* ---------- 44. ATTACK: tiny ad video vs big lecture player ---------- */
+group('44. ATTACK: largest video wins when nothing is playing');
+{
+  const p = createPage();
+  const ad = p.doc.createElement('video');
+  Object.defineProperty(ad, 'videoWidth',  { value: 320, configurable: true });
+  Object.defineProperty(ad, 'videoHeight', { value: 180, configurable: true });
+  p.doc.body.appendChild(ad);              // FIRST in DOM (old code would pick this!)
+
+  const lecture = p.doc.createElement('video');
+  Object.defineProperty(lecture, 'videoWidth',  { value: 1280, configurable: true });
+  Object.defineProperty(lecture, 'videoHeight', { value: 720,  configurable: true });
+  p.doc.body.appendChild(lecture);
+
+  p.press('ArrowUp');
+  eq(lecture.playbackRate, 2, 'big lecture player gets 2x');
+  eq(ad.playbackRate, 1, 'tiny ad video ignored');
+}
+
+/* ---------- 45. stale lockedVideo released after SPA teardown ---------- */
+group('45. Stale lock released after player removed + lock expired');
+{
+  const p = createPage();
+  const v1 = p.addVideo({ playing: true });
+  p.press('ArrowUp');                      // lock v1
+  v1.remove();                             // player torn down
+  p.advance(3500);                         // lock expires
+  const v2 = p.addVideo({ playing: true });
+  v2.playbackRate = 1;
+  p.press('ArrowDown');                    // cleanly retargets v2 (creates fresh 1x lock)
+  eq(v2.playbackRate, 1, 'arrows cleanly target the live player (no crash, no stale ref)');
+  p.advance(3100);                         // let THAT fresh lock expire too
+  p.siteSetsSpeed(v2, 1.5);
+  eq(v2.playbackRate, 1.5, 'after all locks expire, manual change on v2 persists');
+  p.siteSetsSpeed(v1, 0.25);               // dead video's ghost must never act
+  eq(v1.playbackRate, 0.25, 'no ghost-enforcement from the dead video');
+  eq(v2.playbackRate, 1.5, '...and it never touches the live video either');
+}
+
 /* ================= summary ================= */
 console.log('\n════════════════════════════════════');
 console.log(`  RESULT: ${passed} passed, ${failed} failed`);

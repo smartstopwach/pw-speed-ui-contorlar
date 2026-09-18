@@ -1,5 +1,5 @@
 /* ============================================================
- * PW Speed Controller + Clean View  —  content script (v1.4)
+ * PW Speed Controller + Clean View  —  content script (v1.4.1)
  * ------------------------------------------------------------
  *  UP ARROW    -> lecture/video continues at 2x
  *  DOWN ARROW  -> lecture/video continues at 1x
@@ -15,6 +15,12 @@
  * ========================================================== */
 (() => {
   'use strict';
+
+  /* DOUBLE-INJECTION GUARD: if this script ever runs twice on the same
+   * window (extension reload, page quirk), the second copy must die —
+   * otherwise every key would toggle twice and cancel itself out. */
+  if (window.__PSC_ACTIVE__) return;
+  window.__PSC_ACTIVE__ = true;
 
   /* ------------------ USER CONFIG (edit freely) ------------------ */
   const UP_SPEED    = 2.0;   // speed when UP arrow is pressed
@@ -76,17 +82,29 @@
 
   /* ---- pick the playing video; fall back to ANY video present ----
    * (a just-inserted video with readyState 0 must still be controllable) */
+  function videoArea(v) {
+    return (v.videoWidth || 0) * (v.videoHeight || 0);
+  }
   function getActiveVideo() {
     /* While a lock is hot, arrows keep targeting the LOCKED video —
      * a background preview suddenly autoplaying must not steal them. */
     if (lockedVideo && lockedVideo.isConnected && Date.now() < lockUntil) {
       return lockedVideo;
     }
+    /* Cold lock + detached old player -> release the stale reference */
+    if (lockedVideo && !lockedVideo.isConnected && Date.now() >= lockUntil) {
+      lockedVideo = null;
+    }
     const vids = findVideos();
     if (!vids.length) return null;
     const usable = vids.filter(v => v.readyState > 0 || !v.paused || v.videoWidth > 0);
     const pool = usable.length ? usable : vids;
-    return pool.find(v => !v.paused && !v.ended) || pool[0];
+    const playing = pool.find(v => !v.paused && !v.ended);
+    if (playing) return playing;
+    /* nothing playing: hit the LARGEST video (the lecture), not some
+     * tiny ad/preview element that happens to be first in the DOM */
+    return pool.reduce((best, x) =>
+      (!best || videoArea(x) > videoArea(best)) ? x : best, null);
   }
 
   /* ---- don't steal keys while the user is typing ---- */

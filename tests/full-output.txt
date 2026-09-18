@@ -185,7 +185,34 @@
   ✅ background video untouched by arrows during lock
   ✅ after lock: arrows follow current playing video again
 
+━━━ 40. ATTACK: script injected twice -> second copy is inert ━━━
+  ✅ single T press = exactly ONE toggle (no cancel-out)
+  ✅ second T = back to normal
+  ✅ arrows still work after duplicate injection
+  ✅ still exactly ONE toast element
+
+━━━ 41. PRECISION: combo boundary at exactly 200/201ms ━━━
+  ✅ gap == 200ms -> combo fires
+  ✅ gap == 201ms -> plain 1x, no combo
+
+━━━ 42. PRECISION: lock expiry boundary ━━━
+  ✅ override at 2999ms -> still snapped back
+  ✅ override at 3001ms -> adopted as manual
+
+━━━ 43. ATTACK: 0ms simultaneous ↑+↓ combo ━━━
+  ✅ 0ms gap -> combo still fires
+
+━━━ 44. ATTACK: largest video wins when nothing is playing ━━━
+  ✅ big lecture player gets 2x
+  ✅ tiny ad video ignored
+
+━━━ 45. Stale lock released after player removed + lock expired ━━━
+  ✅ arrows cleanly target the live player (no crash, no stale ref)
+  ✅ after all locks expire, manual change on v2 persists
+  ✅ no ghost-enforcement from the dead video
+  ✅ ...and it never touches the live video either
+
 ════════════════════════════════════
-  RESULT: 108 passed, 0 failed
+  RESULT: 123 passed, 0 failed
   ALL FEATURES WORKING ✅
 ════════════════════════════════════
