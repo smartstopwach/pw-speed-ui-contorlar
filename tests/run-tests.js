@@ -1,5 +1,5 @@
 /* ================================================================
- *  PW Speed Controller — automated feature test-suite (v1.3)
+ *  PW Speed Controller — automated feature test-suite (v1.4)
  *  Simulates real pages (YouTube / PW style) with jsdom and runs
  *  the REAL content.js against keyboard + player events.
  *  Run:  node run-tests.js
@@ -354,21 +354,29 @@ group('19. Clean view restored per site on next visit');
   eq(p2.isClean(), true, 'clean auto-reapplied on new page visit');
 }
 
-/* ---------- 20. loadedmetadata during lock ---------- */
-group('20. New video load during lock gets desired speed');
+/* ---------- 20. SPA swap: speed follows the FRESH player, bg videos ignored ---------- */
+group('20. SPA swap during lock: follows new player only');
 {
   const p = createPage();
   const v1 = p.addVideo({ playing: true });
   p.press('ArrowUp');
   p.advance(500);                                  // still inside lock
-  const v2 = p.addVideo({ playing: true });        // SPA swaps to a fresh <video>
+
+  v1.remove();                                     // SPA swaps the player out
+  const v2 = p.addVideo({ playing: true });
   p.loaded(v2);
-  eq(v2.playbackRate, 2, 'fresh video inherits 2x during lock');
+  eq(v2.playbackRate, 2, 'fresh swapped-in player inherits 2x during lock');
+  p.siteSetsSpeed(v2, 1.5);                        // site fights the NEW player
+  eq(v2.playbackRate, 2, 'lock now protects the NEW video');
+
+  const v3 = p.addVideo();                         // unrelated background video loads
+  p.loaded(v3);
+  eq(v3.playbackRate, 1, 'unrelated background video NOT forced');
 
   p.advance(3000);                                 // lock expired now
-  const v3 = p.addVideo({ playing: true });
-  p.loaded(v3);
-  eq(v3.playbackRate, 1, 'after lock, fresh video NOT speed-forced');
+  const v4 = p.addVideo();
+  p.loaded(v4);
+  eq(v4.playbackRate, 1, 'after lock, fresh video NOT speed-forced');
 }
 
 /* ---------- 21. stopImmediatePropagation beats site handlers ---------- */
@@ -514,9 +522,9 @@ group('29. REGRESSION: clean view protects video-wrapping containers');
   const css = fs.readFileSync(
     path.join(__dirname, '..', 'PW-Speed-Controller', 'clean.css'), 'utf8');
   const generic = css.match(/\[class\*="toggle"\][^\n]*/g) || [];
-  ok(generic.length > 0 && generic.every(s => s.includes(':not(:has(video))')),
-     'generic toggle selectors guard ancestors of video (:not(:has(video)))');
-  ok((css.match(/:not\(:has\(video\)\)/g) || []).length >= 10,
+  ok(generic.length > 0 && generic.every(s => s.includes(':not(:has(video, iframe))')),
+     'generic toggle selectors guard video/iframe-wrapping ancestors');
+  ok((css.match(/:not\(:has\(video, iframe\)\)/g) || []).length >= 10,
      'all clutter selector groups carry the wrapper guard');
 }
 
@@ -529,6 +537,154 @@ group('30. Fast path: top-level video controlled instantly');
   eq(v.playbackRate, 2, 'top-level video 2x via fast path');
   p.press('t');
   eq(p.isClean(), true, 'clean toggle unaffected by video lookup changes');
+}
+
+/* ================= HARDCORE ATTACK TESTS (v1.4) ================= */
+
+/* ---------- 31. ATTACK: system clock jumps backwards -> phantom combo ---------- */
+group('31. ATTACK: clock jumps backwards -> NO phantom combo');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');                              // lastArrow = Up @ T0
+  p.win.__fakeNow = p.now() - 60000;               // user/system clock jumps BACK 60s
+  p.press('ArrowDown');                            // negative gap must NOT combo
+  eq(v.playbackRate, 1, 'plain 1x — no phantom 1.5x from time travel');
+}
+
+/* ---------- 32. ATTACK: modifier+arrow hijack of browser/OS shortcuts ---------- */
+group('32. ATTACK: Ctrl/Alt/Meta + arrows NOT hijacked');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  v.playbackRate = 2;
+  const prevented = p.press('ArrowUp', { ctrlKey: true });
+  eq(prevented, false, 'Ctrl+ArrowUp not prevented');
+  eq(v.playbackRate, 2, 'Ctrl+ArrowUp does not change speed');
+  eq(p.press('ArrowDown', { altKey: true }), false, 'Alt+ArrowDown passes through');
+  eq(v.playbackRate, 2, 'Alt+ArrowDown no speed change');
+  /* modifier arrow must also not seed the combo tracker */
+  p.press('ArrowUp', { ctrlKey: true });
+  p.advance(50);
+  p.press('ArrowDown');
+  eq(v.playbackRate, 1, 'Ctrl+Up then Down = plain 1x (modifier press not combo-seeded)');
+}
+
+/* ---------- 33. ATTACK: background video fights during lock ---------- */
+group('33. ATTACK: lock protects ONLY our video, not background ones');
+{
+  const p = createPage();
+  const v1 = p.addVideo({ playing: true });
+  const v2 = p.addVideo({ playing: false });       // background/preview video
+  p.press('ArrowUp');                              // locks v1 @ 2x
+  p.siteSetsSpeed(v2, 0.5);                        // bg video changes inside lock
+  eq(v2.playbackRate, 0.5, 'background video left alone during lock');
+  p.siteSetsSpeed(v1, 1.5);                        // our video attacked
+  eq(v1.playbackRate, 2, 'locked video still snapped back to 2x');
+}
+
+/* ---------- 34. ATTACK: rapid alternation stress (mashing) ---------- */
+group('34. ATTACK: arrow mashing stays sane');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  /* alternate arrows every 100ms -> every second press is inside combo window */
+  for (let i = 0; i < 10; i++) {
+    p.press(i % 2 ? 'ArrowDown' : 'ArrowUp');
+    p.advance(100);
+  }
+  ok([1, 1.5, 2].includes(v.playbackRate),
+     'final speed is always a valid value, never NaN/garbage', String(v.playbackRate));
+  ok(typeof v.playbackRate === 'number' && v.playbackRate > 0, 'rate stays a sane number');
+}
+
+/* ---------- 35. ATTACK: typing inside SHADOW DOM input (PW/Ionic style) ---------- */
+group('35. ATTACK: typing in shadow-DOM input must not hijack arrows');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  v.playbackRate = 1.5;
+  const host = p.doc.createElement('div');
+  const shadow = host.attachShadow({ mode: 'open' });
+  const innerInput = p.doc.createElement('input');
+  shadow.appendChild(innerInput);
+  p.doc.body.appendChild(host);
+
+  const ev = new p.win.KeyboardEvent('keydown',
+    { key: 'ArrowUp', bubbles: true, cancelable: true, composed: true });
+  innerInput.dispatchEvent(ev);                    // e.target retargets to host!
+  eq(v.playbackRate, 1.5, 'shadow input typing: speed untouched');
+  eq(ev.defaultPrevented, false, 'shadow input typing: event not prevented');
+
+  const ev2 = new p.win.KeyboardEvent('keydown',
+    { key: 't', bubbles: true, cancelable: true, composed: true });
+  innerInput.dispatchEvent(ev2);
+  eq(p.isClean(), false, 'shadow input typing: clean view not toggled');
+}
+
+/* ---------- 36. ATTACK: iframe video enforcement (snap-back inside iframe) ---------- */
+group('36. ATTACK: iframe-video lock actually snaps back');
+{
+  const p = createPage();
+  const iframe = p.doc.createElement('iframe');
+  p.doc.body.appendChild(iframe);
+  const v = iframe.contentDocument.createElement('video');
+  Object.defineProperty(v, 'readyState', { value: 2, configurable: true });
+  iframe.contentDocument.body.appendChild(v);
+
+  p.press('ArrowUp');                              // lock iframe video @ 2x
+  p.siteSetsSpeed(v, 1.5);                         // site fights inside iframe
+  eq(v.playbackRate, 2, 'iframe video snapped back to 2x (element-level listener)');
+}
+
+/* ---------- 37. ATTACK: hostile page (events thrown at weird targets) ---------- */
+group('37. ATTACK: malformed/weird events never crash extension');
+{
+  const p = createPage();
+  const v = p.addVideo({ playing: true });
+  p.press('ArrowUp');
+  /* manually constructed ratechange with non-video target */
+  const div = p.doc.createElement('div');
+  div.dispatchEvent(new p.win.Event('ratechange'));
+  /* loadedmetadata on a div */
+  div.dispatchEvent(new p.win.Event('loadedmetadata'));
+  /* keydown with garbage key */
+  p.win.dispatchEvent(new p.win.KeyboardEvent('keydown', { key: undefined, bubbles: true }));
+  eq(v.playbackRate, 2, 'speed unaffected by garbage events');
+  eq(p.isClean(), false, 'clean view unaffected by garbage events');
+}
+
+/* ---------- 38. ATTACK: holding T (auto-repeat) must not flicker ---------- */
+group('38. ATTACK: holding T does not flicker clean view');
+{
+  const p = createPage();
+  p.press('t');                                    // first press -> ON
+  eq(p.isClean(), true, 'T press -> clean ON');
+  p.advance(60); p.press('t', { repeat: true });   // held key auto-repeats
+  p.advance(60); p.press('t', { repeat: true });
+  p.advance(60); p.press('t', { repeat: true });
+  eq(p.isClean(), true, 'repeat events ignored — stays ON, no flicker');
+  p.advance(60); p.press('t');                     // genuine second press
+  eq(p.isClean(), false, 'real second press -> OFF');
+}
+
+/* ---------- 39. ATTACK: background autoplay must not steal arrows during lock ---------- */
+group('39. ATTACK: background autoplay video cannot steal arrows mid-lock');
+{
+  const p = createPage();
+  const v1 = p.addVideo({ playing: true });
+  p.press('ArrowUp');                              // lock v1 @ 2x
+  /* v1 pauses (buffering), bg preview v2 starts playing mid-lock */
+  Object.defineProperty(v1, 'paused', { get: () => true, configurable: true });
+  const v2 = p.addVideo({ playing: true });
+  v2.playbackRate = 3;
+  p.advance(500);                                  // beat combo window, still inside lock
+  p.press('ArrowDown');                            // must still target locked v1
+  eq(v1.playbackRate, 1, 'during lock: arrows hit LOCKED video (v1 -> 1x)');
+  eq(v2.playbackRate, 3, 'background video untouched by arrows during lock');
+  p.advance(3100);                                 // lock expires
+  p.press('ArrowUp');                              // now normal detection resumes
+  eq(v2.playbackRate, 2, 'after lock: arrows follow current playing video again');
 }
 
 /* ================= summary ================= */

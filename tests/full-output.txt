@@ -86,8 +86,10 @@
   ✅ clean state saved to storage
   ✅ clean auto-reapplied on new page visit
 
-━━━ 20. New video load during lock gets desired speed ━━━
-  ✅ fresh video inherits 2x during lock
+━━━ 20. SPA swap during lock: follows new player only ━━━
+  ✅ fresh swapped-in player inherits 2x during lock
+  ✅ lock now protects the NEW video
+  ✅ unrelated background video NOT forced
   ✅ after lock, fresh video NOT speed-forced
 
 ━━━ 21. Site key handlers blocked for arrows ━━━
@@ -136,14 +138,54 @@
   ✅ real override still snapped back to 2x
 
 ━━━ 29. REGRESSION: clean view protects video-wrapping containers ━━━
-  ✅ generic toggle selectors guard ancestors of video (:not(:has(video)))
+  ✅ generic toggle selectors guard video/iframe-wrapping ancestors
   ✅ all clutter selector groups carry the wrapper guard
 
 ━━━ 30. Fast path: top-level video controlled instantly ━━━
   ✅ top-level video 2x via fast path
   ✅ clean toggle unaffected by video lookup changes
 
+━━━ 31. ATTACK: clock jumps backwards -> NO phantom combo ━━━
+  ✅ plain 1x — no phantom 1.5x from time travel
+
+━━━ 32. ATTACK: Ctrl/Alt/Meta + arrows NOT hijacked ━━━
+  ✅ Ctrl+ArrowUp not prevented
+  ✅ Ctrl+ArrowUp does not change speed
+  ✅ Alt+ArrowDown passes through
+  ✅ Alt+ArrowDown no speed change
+  ✅ Ctrl+Up then Down = plain 1x (modifier press not combo-seeded)
+
+━━━ 33. ATTACK: lock protects ONLY our video, not background ones ━━━
+  ✅ background video left alone during lock
+  ✅ locked video still snapped back to 2x
+
+━━━ 34. ATTACK: arrow mashing stays sane ━━━
+  ✅ final speed is always a valid value, never NaN/garbage
+  ✅ rate stays a sane number
+
+━━━ 35. ATTACK: typing in shadow-DOM input must not hijack arrows ━━━
+  ✅ shadow input typing: speed untouched
+  ✅ shadow input typing: event not prevented
+  ✅ shadow input typing: clean view not toggled
+
+━━━ 36. ATTACK: iframe-video lock actually snaps back ━━━
+  ✅ iframe video snapped back to 2x (element-level listener)
+
+━━━ 37. ATTACK: malformed/weird events never crash extension ━━━
+  ✅ speed unaffected by garbage events
+  ✅ clean view unaffected by garbage events
+
+━━━ 38. ATTACK: holding T does not flicker clean view ━━━
+  ✅ T press -> clean ON
+  ✅ repeat events ignored — stays ON, no flicker
+  ✅ real second press -> OFF
+
+━━━ 39. ATTACK: background autoplay video cannot steal arrows mid-lock ━━━
+  ✅ during lock: arrows hit LOCKED video (v1 -> 1x)
+  ✅ background video untouched by arrows during lock
+  ✅ after lock: arrows follow current playing video again
+
 ════════════════════════════════════
-  RESULT: 84 passed, 0 failed
+  RESULT: 108 passed, 0 failed
   ALL FEATURES WORKING ✅
 ════════════════════════════════════

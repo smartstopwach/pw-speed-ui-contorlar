@@ -18,34 +18,34 @@
 }
 
 /* ---------- PW (pw.live) player clutter ----------
-   :not(:has(video)) => never hide a container that WRAPS the video,
+   :not(:has(video, iframe)) => never hide a container that WRAPS the video (or an iframe player),
    otherwise clean mode could blank the whole player! */
-.psc-clean [class*="player-options"]:not(:has(video)),
-.psc-clean [class*="playerOptions"]:not(:has(video)),
-.psc-clean [class*="top-options"]:not(:has(video)),
-.psc-clean [class*="topOptions"]:not(:has(video)),
-.psc-clean [class*="video-toggle"]:not(:has(video)),
-.psc-clean [class*="videoToggle"]:not(:has(video)),
-.psc-clean [class*="gesture"]:not(:has(video)),
-.psc-clean [class*="Gesture"]:not(:has(video)),
-.psc-clean [class*="seek-overlay"]:not(:has(video)),
-.psc-clean [class*="seekOverlay"]:not(:has(video)),
-.psc-clean [class*="seek-arrow"]:not(:has(video)),
-.psc-clean [class*="seekArrow"]:not(:has(video)),
-.psc-clean [class*="forward-10"]:not(:has(video)),
-.psc-clean [class*="rewind-10"]:not(:has(video)),
-.psc-clean [class*="skip-forward"]:not(:has(video)),
-.psc-clean [class*="skip-backward"]:not(:has(video)),
-.psc-clean [class*="skip-icon"]:not(:has(video)),
-.psc-clean [class*="double-tap"]:not(:has(video)),
-.psc-clean [class*="doubleTap"]:not(:has(video)) {
+.psc-clean [class*="player-options"]:not(:has(video, iframe)),
+.psc-clean [class*="playerOptions"]:not(:has(video, iframe)),
+.psc-clean [class*="top-options"]:not(:has(video, iframe)),
+.psc-clean [class*="topOptions"]:not(:has(video, iframe)),
+.psc-clean [class*="video-toggle"]:not(:has(video, iframe)),
+.psc-clean [class*="videoToggle"]:not(:has(video, iframe)),
+.psc-clean [class*="gesture"]:not(:has(video, iframe)),
+.psc-clean [class*="Gesture"]:not(:has(video, iframe)),
+.psc-clean [class*="seek-overlay"]:not(:has(video, iframe)),
+.psc-clean [class*="seekOverlay"]:not(:has(video, iframe)),
+.psc-clean [class*="seek-arrow"]:not(:has(video, iframe)),
+.psc-clean [class*="seekArrow"]:not(:has(video, iframe)),
+.psc-clean [class*="forward-10"]:not(:has(video, iframe)),
+.psc-clean [class*="rewind-10"]:not(:has(video, iframe)),
+.psc-clean [class*="skip-forward"]:not(:has(video, iframe)),
+.psc-clean [class*="skip-backward"]:not(:has(video, iframe)),
+.psc-clean [class*="skip-icon"]:not(:has(video, iframe)),
+.psc-clean [class*="double-tap"]:not(:has(video, iframe)),
+.psc-clean [class*="doubleTap"]:not(:has(video, iframe)) {
   display: none !important;
 }
 
 /* ---------- generic toggle chips / buttons floating over video ----------
    same ancestor-of-video protection as above */
-.psc-clean [class*="toggle"]:not(video):not(#psc-toast):not(:has(video)),
-.psc-clean [class*="Toggle"]:not(video):not(#psc-toast):not(:has(video)) {
+.psc-clean [class*="toggle"]:not(video):not(#psc-toast):not(:has(video, iframe)),
+.psc-clean [class*="Toggle"]:not(video):not(#psc-toast):not(:has(video, iframe)) {
   display: none !important;
 }
 

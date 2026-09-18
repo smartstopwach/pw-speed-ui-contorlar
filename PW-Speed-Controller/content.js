@@ -1,5 +1,5 @@
 /* ============================================================
- * PW Speed Controller + Clean View  —  content script (v1.3)
+ * PW Speed Controller + Clean View  —  content script (v1.4)
  * ------------------------------------------------------------
  *  UP ARROW    -> lecture/video continues at 2x
  *  DOWN ARROW  -> lecture/video continues at 1x
@@ -31,10 +31,12 @@
   const EPS         = 0.001;   // float tolerance when comparing speeds
 
   /* speed-lock state */
-  let desiredSpeed = null;   // last speed chosen via arrows (or adopted manually)
-  let lockUntil    = 0;      // timestamp until which we fight site interference
+  let desiredSpeed = null;      // last speed chosen via arrows (or adopted manually)
+  let lockUntil    = 0;         // timestamp until which we fight site interference
+  let lockedVideo  = null;      // ONLY this video is protected (never bg videos)
   let lastSnapToast = 0;
   let lastArrow    = { key: null, time: 0 };  // for the ↑+↓ combo = 1.5x
+  const enforcedVideos = new WeakSet();       // videos already wired with listener
 
   /* ---- find every <video>, even inside shadow roots ---- */
   function deepQueryAll(selector, root) {
@@ -75,6 +77,11 @@
   /* ---- pick the playing video; fall back to ANY video present ----
    * (a just-inserted video with readyState 0 must still be controllable) */
   function getActiveVideo() {
+    /* While a lock is hot, arrows keep targeting the LOCKED video —
+     * a background preview suddenly autoplaying must not steal them. */
+    if (lockedVideo && lockedVideo.isConnected && Date.now() < lockUntil) {
+      return lockedVideo;
+    }
     const vids = findVideos();
     if (!vids.length) return null;
     const usable = vids.filter(v => v.readyState > 0 || !v.paused || v.videoWidth > 0);
@@ -128,22 +135,13 @@
   } catch (e) {}
 
   /* ---------------- speed application + lock ---------------- */
-  function lockInSpeed(v, rate, combo) {
-    desiredSpeed = rate;
-    lockUntil = Date.now() + LOCK_MS;
-    v.playbackRate = rate;
-    v.defaultPlaybackRate = rate;
-    showToast(combo ? ('⚡ ' + rate + '× combo 🔒')
-                    : ((rate > 1 ? '⏩ ' : '▶ ') + rate + '× speed 🔒'));
-  }
-
-  /* Watch every speed change (capture: works even though media events
-   * don't bubble). Decides: site interference -> snap back, or genuine
-   * manual change -> respect & adopt it. */
-  window.addEventListener('ratechange', (e) => {
-    const v = e.target;
-    if (!v || v.tagName !== 'VIDEO') return;
+  /* Element-level listener: attached DIRECTLY to each locked video, so
+   * enforcement even works for videos inside same-origin iframes (whose
+   * events never reach this window's listeners). */
+  function onRateChange(e) {
+    const v = e.currentTarget;
     if (desiredSpeed === null) return;
+    if (v !== lockedVideo) return;            // never fight background videos
 
     const now = Date.now();
     if (Math.abs(v.playbackRate - desiredSpeed) < EPS) return;   // nothing to fix
@@ -158,18 +156,40 @@
         showToast('🔒 ' + desiredSpeed + '× kept');
       }
     } else {
-      /* Lock window over -> user changed speed deliberately.
+      /* Lock window over -> user changed speed deliberately ON OUR VIDEO.
        * Respect it AND adopt it so we never fight them again. */
       desiredSpeed = v.playbackRate;
     }
-  }, true);
+  }
 
-  /* If a fresh video loads/resets speed while the lock is still hot,
-   * push our speed back onto it. */
+  function wireVideo(v) {
+    if (!enforcedVideos.has(v)) {
+      enforcedVideos.add(v);
+      v.addEventListener('ratechange', onRateChange);
+    }
+  }
+
+  function lockInSpeed(v, rate, combo) {
+    desiredSpeed = rate;
+    lockedVideo  = v;
+    lockUntil = Date.now() + LOCK_MS;
+    wireVideo(v);
+    v.playbackRate = rate;
+    v.defaultPlaybackRate = rate;
+    showToast(combo ? ('⚡ ' + rate + '× combo 🔒')
+                    : ((rate > 1 ? '⏩ ' : '▶ ') + rate + '× speed 🔒'));
+  }
+
+  /* If the SPA swaps in a fresh player while the lock is still hot,
+   * follow it: push our speed onto it and make it the protected one.
+   * (Background/extra videos loading are left strictly alone.) */
   window.addEventListener('loadedmetadata', (e) => {
     const v = e.target;
     if (!v || v.tagName !== 'VIDEO') return;
-    if (desiredSpeed !== null && Date.now() < lockUntil) {
+    if (desiredSpeed === null || Date.now() >= lockUntil) return;
+    if (v === lockedVideo || !lockedVideo || !lockedVideo.isConnected) {
+      wireVideo(v);
+      lockedVideo = v;
       v.playbackRate = desiredSpeed;
       v.defaultPlaybackRate = desiredSpeed;
     }
@@ -177,38 +197,51 @@
 
   /* ---------------- keyboard control ---------------- */
   window.addEventListener('keydown', (e) => {
-    if (e.isComposing || isTypingTarget(e.target)) return;
+    try {
+      if (e.isComposing) return;
 
-    /* ---- UP / DOWN arrows = SPEED ---- */
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      const v = getActiveVideo();
-      if (!v) return;                      // no video -> leave default behaviour
+      /* composedPath()[0] = TRUE target even inside shadow DOM —
+       * typing in a shadow input must stay safe (e.target is retargeted). */
+      const realTarget = (e.composedPath && e.composedPath()[0]) || e.target;
+      if (isTypingTarget(realTarget)) return;
 
-      e.preventDefault();
-      e.stopImmediatePropagation();        // block page scroll / YT volume / site's own key handlers
+      /* ---- UP / DOWN arrows = SPEED ---- */
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;   // leave browser/OS combos alone
 
-      const now = Date.now();
-      const other = (e.key === 'ArrowUp') ? 'ArrowDown' : 'ArrowUp';
+        const v = getActiveVideo();
+        if (!v) return;                      // no video -> leave default behaviour
 
-      /* ↑ and ↓ pressed almost together -> combo speed 1.5x */
-      if (!e.repeat && lastArrow.key === other && now - lastArrow.time <= COMBO_MS) {
-        lastArrow = { key: null, time: 0 };
-        lockInSpeed(v, COMBO_SPEED, true);
+        e.preventDefault();
+        e.stopImmediatePropagation();        // block page scroll / YT volume / site's own key handlers
+
+        const now = Date.now();
+        const other = (e.key === 'ArrowUp') ? 'ArrowDown' : 'ArrowUp';
+        const gap = now - lastArrow.time;
+
+        /* ↑ and ↓ pressed almost together -> combo speed 1.5x
+         * gap must be >= 0 too: a system clock moving backwards must
+         * never fire a phantom combo. */
+        if (!e.repeat && lastArrow.key === other && gap >= 0 && gap <= COMBO_MS) {
+          lastArrow = { key: null, time: 0 };
+          lockInSpeed(v, COMBO_SPEED, true);
+          return;
+        }
+
+        if (!e.repeat) lastArrow = { key: e.key, time: now };
+        const rate = (e.key === 'ArrowUp') ? UP_SPEED : DOWN_SPEED;
+        lockInSpeed(v, rate, false);
         return;
       }
 
-      if (!e.repeat) lastArrow = { key: e.key, time: now };
-      const rate = (e.key === 'ArrowUp') ? UP_SPEED : DOWN_SPEED;
-      lockInSpeed(v, rate, false);
-      return;
-    }
-
-    /* ---- T = clean view toggle ---- */
-    if ((e.key === CLEAN_KEY || e.key === CLEAN_KEY.toUpperCase()) &&
-        !e.ctrlKey && !e.metaKey && !e.altKey) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      toggleClean();
-    }
+      /* ---- T = clean view toggle (ignore key auto-repeat: no flicker) ---- */
+      if (!e.repeat &&
+          (e.key === CLEAN_KEY || e.key === CLEAN_KEY.toUpperCase()) &&
+          !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        toggleClean();
+      }
+    } catch (err) { /* hardcore rule: never break the host page */ }
   }, true);   // capture phase -> we win over the site's own handlers
 })();
