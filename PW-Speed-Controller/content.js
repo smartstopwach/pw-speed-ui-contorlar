@@ -1,5 +1,5 @@
 /* ============================================================
- * PW Speed Controller + Clean View  —  content script (v1.4.1)
+ * PW Speed Controller + Clean View  —  content script (v1.4.2)
  * ------------------------------------------------------------
  *  UP ARROW    -> lecture/video continues at 2x
  *  DOWN ARROW  -> lecture/video continues at 1x
@@ -145,10 +145,17 @@
     try { chrome.storage && chrome.storage.local && chrome.storage.local.set({ [STORE_KEY]: on }); } catch (e) {}
   }
 
-  /* restore clean view per site so lectures stay clean */
+  /* restore clean view per site so lectures stay clean.
+   * Robust under ANY injection timing: documentElement may not exist yet
+   * at document_start — in that case apply it as soon as the DOM exists. */
   try {
     chrome.storage && chrome.storage.local && chrome.storage.local.get(STORE_KEY, (r) => {
-      if (r && r[STORE_KEY]) document.documentElement.classList.add(CLEAN_CLASS);
+      if (!(r && r[STORE_KEY])) return;
+      const apply = () => {
+        if (document.documentElement) document.documentElement.classList.add(CLEAN_CLASS);
+      };
+      if (document.documentElement) apply();
+      else document.addEventListener('DOMContentLoaded', apply, { once: true });
     });
   } catch (e) {}
 

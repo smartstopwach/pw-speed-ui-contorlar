@@ -1,17 +1,46 @@
-# 🧪 Test Report — PW Speed Controller v1.4.1 (HARDCORE EDITION)
+# 🧪 Test Report — PW Speed Controller v1.4.2 (UNIT + TRUE E2E)
 
 **Date:** 2026-09-18
-**Method:** Automated jsdom adversarial simulation — the REAL `content.js` runs
-against mock YouTube / pw.live pages with real KeyboardEvents, ratechange/loadedmetadata
-events, shadow DOM, same-origin iframes, fullscreen state, duplicate injection,
-storage, and full time control (clock jumps, auto-repeat, ms-precision boundaries).
-**123 assertions · 45 groups · 0 failures**
+**Layers:**
+1. **Unit (jsdom):** 123 assertions · 45 groups · simulated pages with full time control
+2. **E2E (REAL Chromium 131):** 36 assertions · 17 scenarios · real keyboard/CDP
+   pipeline, real media events, real CSS cascade, real per-origin storage — pages
+   served as `pw.live` / `youtube.com` origins (`--host-resolver-rules`), real
+   `content.js`/`clean.css` injected unmodified (document_start injection shim —
+   sandbox network cannot fetch an extension-enabled Chrome; every browser CDN is
+   blocked here, engine still 100% real Chromium)
 
-## ✅ Result: 123/123 PASSED — ALL FEATURES + ALL ATTACKS SURVIVED (3 rounds)
+## ✅ UNIT: 123/123 PASSED · E2E: 36/36 PASSED — 159 checks, zero failures
+
+## 🌐 E2E scenarios (real browser)
+| # | Scenario | Result |
+|---|---|---|
+| E1 | ↑ = 2×, ↓ = 1× on real player + real toast | ✅ |
+| E2 | ↑+↓ fast = 1.5× combo (real key events) | ✅ |
+| E3 | **THE bug:** site forces 1.5× during lock (REAL ratechange) → snapped to 2× | ✅ |
+| E4 | Manual 1.75× after 3s lock respected | ✅ |
+| E5 | "t" hides clutter **but not** video-wrapping container (real `:has()` cascade) | ✅ |
+| E6 | Typing in normal + shadow-DOM inputs safe | ✅ |
+| E7 | Ctrl/Alt+arrows untouched | ✅ |
+| E8 | Holding T (real OS auto-repeat) → ON once, no flicker | ✅ |
+| E9 | Clean view restored after reload (real per-origin storage) | ✅ |
+| E10 | iframe player: arrows + snap-back cross-frame | ✅ |
+| E11 | Paused video controllable | ✅ |
+| E12 | Actively playing video: 2× keeps playing | ✅ |
+| E13 | Largest video wins over tiny one | ✅ |
+| E14 | Double injection → exactly one toggle | ✅ |
+| E15 | Journey: 2× → manual 1.25 (adopted) → arrows → 1× | ✅ |
+| E16 | Toast re-parents into fullscreen element (real fullscreen!) | ✅ |
+| E17 | Ended video still accepts speed | ✅ |
 
 ---
 
-## 🐛➜🔧 Total bugs found & fixed across rounds: 17
+## 🐛➜🔧 Total bugs found & fixed: 18
+
+### Round v1.4.2 (caught by REAL end-to-end test)
+| # | Bug | Fix |
+|---|---|---|
+| 18 | Clean-view restore touched `documentElement.classList` directly — if injection ever lands at `document_start` (element not existing yet), restore silently failed | Apply on `DOMContentLoaded` when DOM not ready yet |
 
 ### Round v1.4.1 (precision & injection attacks)
 | # | Attack | Fix |
@@ -81,5 +110,10 @@ storage, and full time control (clock jumps, auto-repeat, ms-precision boundarie
 
 ## 🔁 Re-run anytime
 ```bash
-cd tests && npm install && npm test
+cd tests
+npm install                 # first time only
+npm test                    # unit layer (jsdom, 123 checks)
+bash e2e/prepare-browser.sh # first time only: real chromium + libs
+npm run test:e2e            # E2E layer (real Chromium, 36 checks)
 ```
+- Full outputs: `full-output.txt` (unit) · `e2e/e2e-output.txt` (E2E)

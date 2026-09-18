@@ -1,0 +1,76 @@
+E2E: real HeadlessChrome/131.0.6778.0 (injection shim: extension engine N/A in sandbox)
+
+
+━━━ E1. ↑ = 2×, ↓ = 1× (real Chromium) ━━━
+  ✅ ArrowUp -> real playbackRate 2x
+  ✅ real toast visible: 2×
+  ✅ ArrowDown -> 1x
+
+━━━ E2. ↑+↓ combo = 1.5× (real key events) ━━━
+  ✅ fast ↑↓ -> 1.5x combo
+  ✅ combo toast shown
+
+━━━ E3. LOCK: player click re-applying 1.5× snapped back (REAL events) ━━━
+  ✅ site 1.5x snapped back to 2x by real lock
+
+━━━ E4. manual change after 3s lock respected ━━━
+  ✅ manual 1.75x after lock stays
+
+━━━ E5. "t" hides clutter but NEVER the video wrapper (real CSS) ━━━
+  ✅ t -> clean ON
+  ✅ toggle-bar hidden (real computed style)
+  ✅ gesture overlay hidden
+  ✅ video WRAPPER (has "toggle" in class) NOT hidden — :has() guard works in real cascade
+  ✅ video still rendered & visible
+  ✅ second t -> clutter back
+
+━━━ E6. typing in normal & shadow inputs stays safe ━━━
+  ✅ typing in normal input: rate untouched
+  ✅ typing in SHADOW input: rate untouched (retarget attack blocked)
+
+━━━ E7. Ctrl/Alt + arrows NOT hijacked ━━━
+  ✅ Ctrl+ArrowUp no speed change
+  ✅ Alt+ArrowDown no speed change
+
+━━━ E8. holding T (real auto-repeat) -> ON once, no flicker ━━━
+  ✅ after hold: clean ON exactly once
+  ✅ next real press -> OFF
+
+━━━ E9. clean view persisted across reload (real storage API) ━━━
+  ✅ clean ON before reload
+  ✅ after reload: clean auto-restored from chrome.storage
+
+━━━ E10. same-origin iframe player: arrows + lock work cross-frame ━━━
+  ✅ iframe player located
+  ✅ top-page ArrowUp -> iframe video 2x
+  ✅ iframe interference snapped back (element listener, real env)
+
+━━━ E11. paused (not playing) video still controlled ━━━
+  ✅ paused video gets 2x
+
+━━━ E12. PLAYING video controlled mid-playback ━━━
+  ✅ video actually playing (real media decode)
+  ✅ playing video -> 2x keeps playing
+  ✅ playback continues after speed change
+
+━━━ E13. largest video preferred when nothing playing ━━━
+  ✅ big (1280x720) video gets 2x
+  ✅ small (320x180) video ignored
+
+━━━ E14. injecting content.js again does nothing ━━━
+  ✅ exactly ONE toggle after double injection
+  ✅ exactly one toast
+
+━━━ E15. full user journey: 2x -> manual 1.25 (adopted) -> arrows -> 1x ━━━
+  ✅ manual 1.25x kept
+  ✅ then ArrowDown -> 1x
+
+━━━ E16. fullscreen toast re-parents (if fullscreen available) ━━━
+  ✅ toast moved INSIDE fullscreen element
+
+━━━ E17. ended video still accepts speed ━━━
+  ✅ ended/near-ended video gets 2x for next play
+
+════════════════════════════════════
+  E2E RESULT: 36 passed, 0 failed
+════════════════════════════════════

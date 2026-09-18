@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>PW-like lecture page</title></head>
+<body style="background:#ececec; margin:0; font-family:sans-serif;">
+
+  <!-- WRAPS the video. Clean-view must NEVER hide this (has-guard E2E). -->
+  <div class="video-toggle-wrapper" style="position:relative; background:#000;">
+    <video id="lec" src="/test.webm" controls muted width="640"></video>
+    <div class="gesture-overlay" style="position:absolute;top:10px;left:10px;color:#fff;">◀ 10s | 10s ▶</div>
+  </div>
+
+  <div class="player-toggle-bar" style="padding:8px;">⭐ Bookmark | 🔖 Save | ⚙ Quality toggles</div>
+
+  <input id="comment" placeholder="normal input — arrows must stay safe here">
+  <div id="shadowhost"></div>
+
+  <script>
+    const sr = document.getElementById('shadowhost').attachShadow({ mode: 'open' });
+    sr.innerHTML = '<input id="sin" placeholder="shadow input">';
+    /* simulate the PW player re-applying ITS stored speed (the 1.5x bug) */
+    window.siteSet = (r) => { document.getElementById('lec').playbackRate = r; };
+    window.mapKeys = { up: 'ArrowUp', down: 'ArrowDown' };
+  </script>
+</body></html>
